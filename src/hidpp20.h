@@ -231,4 +231,30 @@ int hidpp20_adjustable_dpi_get_sensors(struct ratbag_device *device,
 int hidpp20_adjustable_dpi_set_sensor_dpi(struct ratbag_device *device,
 					  struct hidpp20_sensor *sensor, uint16_t dpi);
 
+/* -------------------------------------------------------------------------- */
+/* 0x6010: Touchpad FW items                                                  */
+/* -------------------------------------------------------------------------- */
+
+#define HIDPP_PAGE_TOUCHPAD_FW_ITEMS			0x6010
+
+#define HIDDP20_TOUCHPAD_FW_ITEMS_TAP_TO_CLICK		(1 << 0)
+
+struct hidpp20_touchpad_fw_items {
+	uint8_t presence;
+	uint8_t desired_state;
+	uint8_t state;
+	uint8_t persistent;
+};
+
+int hidpp20_touchpad_fw_items_get(struct ratbag_device *device,
+				  struct hidpp20_touchpad_fw_items *items);
+
+/**
+ * send a set state command to the device by reading the current items->state
+ * field. items is then filled with the current state as if it were called
+ * from hidpp20_touchpad_fw_items_get().
+ */
+int hidpp20_touchpad_fw_items_set(struct ratbag_device *device,
+				  struct hidpp20_touchpad_fw_items *items);
+
 #endif /* HIDPP_20_H */

@@ -385,6 +385,26 @@ hidpp20drv_init_feature(struct ratbag_device *device, uint16_t feature)
 			device->num_buttons = drv_data->num_controls;
 		 break;
 	}
+	case HIDPP_PAGE_TOUCHPAD_FW_ITEMS: {
+		struct hidpp20_touchpad_fw_items items;
+		log_debug(ratbag, "device has touchpad fw items capabilities\n");
+
+		/* FIXME: there should be a specific command to enable/disable
+		 * this */
+		if (!hidpp20_touchpad_fw_items_get(device, &items)) {
+			if (items.presence & HIDDP20_TOUCHPAD_FW_ITEMS_TAP_TO_CLICK) {
+				/* we toggle the tap enable bit */
+				items.state ^= HIDDP20_TOUCHPAD_FW_ITEMS_TAP_TO_CLICK;
+				if (hidpp20_touchpad_fw_items_set(device, &items))
+					log_error(device->ratbag,
+						  "unable to toggle the 'tap to click' functionality\n");
+				else
+					log_info(device->ratbag,
+						 "'tap to click' set to %s\n",
+						 items.state & HIDDP20_TOUCHPAD_FW_ITEMS_TAP_TO_CLICK ? "Enabled" : "Disabled");
+			}
+		}
+	}
 	default:
 		log_raw(device->ratbag, "unknown feature 0x%04x\n", feature);
 	}
@@ -494,6 +514,9 @@ static const struct ratbag_id hidpp20drv_table[] = {
 
 	/* M325 over unifying */
 	{ .id = LOGITECH_DEVICE(BUS_USB, 0x400a) },
+
+	/* K400 over unifying */
+	{ .id = LOGITECH_DEVICE(BUS_USB, 0x0000) }, /* FIXME */
 
 	{ },
 };

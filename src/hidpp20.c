@@ -917,3 +917,78 @@ int hidpp20_adjustable_dpi_set_sensor_dpi(struct ratbag_device *device,
 
 	return 0;
 }
+
+/* -------------------------------------------------------------------------- */
+/* 0x6010: Touchpad FW items                                                  */
+/* -------------------------------------------------------------------------- */
+
+#define CMD_TOUCHPAD_FW_ITEMS_GET		0x00
+#define CMD_TOUCHPAD_FW_ITEMS_SET		0x10
+
+int hidpp20_touchpad_fw_items_get(struct ratbag_device *device,
+				  struct hidpp20_touchpad_fw_items *items)
+{
+	uint8_t feature_index, feature_type, feature_version;
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = 0xff,
+		.msg.address = CMD_TOUCHPAD_FW_ITEMS_GET,
+	};
+	int rc;
+
+	rc = hidpp_root_get_feature(device,
+				    HIDPP_PAGE_TOUCHPAD_FW_ITEMS,
+				    &feature_index,
+				    &feature_type,
+				    &feature_version);
+	if (rc)
+		return rc;
+
+	msg.msg.sub_id = feature_index;
+
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	items->presence = msg.msg.parameters[0];
+	items->desired_state = msg.msg.parameters[1];
+	items->state = msg.msg.parameters[2];
+	items->persistent = msg.msg.parameters[3];
+
+	return 0;
+}
+
+int hidpp20_touchpad_fw_items_set(struct ratbag_device *device,
+				  struct hidpp20_touchpad_fw_items *items)
+{
+	uint8_t feature_index, feature_type, feature_version;
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = 0xff,
+		.msg.address = CMD_TOUCHPAD_FW_ITEMS_GET,
+		.msg.parameters[0] = items->state,
+	};
+	int rc;
+
+	rc = hidpp_root_get_feature(device,
+				    HIDPP_PAGE_TOUCHPAD_FW_ITEMS,
+				    &feature_index,
+				    &feature_type,
+				    &feature_version);
+	if (rc)
+		return rc;
+
+	msg.msg.sub_id = feature_index;
+
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	items->presence = msg.msg.parameters[0];
+	items->desired_state = msg.msg.parameters[1];
+	items->state = msg.msg.parameters[2];
+	items->persistent = msg.msg.parameters[3];
+
+	return 0;
+}
+
