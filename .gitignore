@@ -46,3 +46,4 @@ test-suite.log
 test-context
 test-*.log
 ratbag-command
+ratbag-gui

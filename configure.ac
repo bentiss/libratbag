@@ -106,6 +106,22 @@ if test "x$build_documentation" = "xyes" -o "x$build_documentation" = "xauto"; t
 	fi
 fi
 
+AC_ARG_ENABLE(ratbag-gui,
+	      AS_HELP_STRING([--enable-ratbag-gui], [Build the GUI ratbag config tool (default=auto)]),
+	      [build_ratbaggui="$enableval"],
+	      [build_ratbaggui="auto"])
+PKG_CHECK_EXISTS([cairo glib-2.0 gtk+-3.0 librsvg-2.0], [HAVE_GUILIBS="yes"], [HAVE_GUILIBS="no"])
+
+if test "x$build_ratbaggui" = "xauto"; then
+	build_ratbaggui="$HAVE_GUILIBS"
+fi
+if test "x$build_ratbaggui" = "xyes"; then
+	PKG_CHECK_MODULES(CAIRO, [cairo])
+	PKG_CHECK_MODULES(GTK, [glib-2.0 gtk+-3.0])
+	PKG_CHECK_MODULES(LIBRSVG, [librsvg-2.0])
+fi
+AM_CONDITIONAL(BUILD_RATBAGGUI, [test "x$build_ratbaggui" = "xyes"])
+
 AC_ARG_ENABLE(tests,
 	      AS_HELP_STRING([--enable-tests], [Build the tests (default=auto)]),
 	      [build_tests="$enableval"],
@@ -143,7 +159,8 @@ AC_OUTPUT
 AC_MSG_RESULT([
 	Prefix			${prefix}
 
-	Build documentation	${build_documentation}
-	Build tests		${build_tests}
-	Tests use valgrind	${VALGRIND}
+	Build documentation		${build_documentation}
+	Build tests			${build_tests}
+	Tests use valgrind		${VALGRIND}
+	Build ratbag graphic tool	${build_ratbaggui}
 	])

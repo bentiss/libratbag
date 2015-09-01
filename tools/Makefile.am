@@ -10,3 +10,12 @@ ratbag_command_SOURCES = ratbag-command.c
 ratbag_command_LDADD = ../src/libratbag.la $(LIBUDEV_LIBS) $(LIBEVDEV_LIBS)
 ratbag_command_LDFLAGS = -no-install
 ratbag_command_CFLAGS = $(LIBUDEV_CFLAGS) $(LIBEVDEV_CFLAGS)
+
+if BUILD_RATBAGGUI
+noinst_PROGRAMS += ratbag-gui
+
+ratbag_gui_SOURCES = ratbag-gui.c
+ratbag_gui_LDADD = ../src/libratbag.la $(CAIRO_LIBS) $(GTK_LIBS) $(LIBUDEV_LIBS) $(LIBRSVG_LIBS)
+ratbag_gui_CFLAGS = $(CAIRO_CFLAGS) $(GTK_CFLAGS) $(LIBUDEV_CFLAGS) $(LIBRSVG_CFLAGS)
+ratbag_gui_LDFLAGS = -no-install
+endif
