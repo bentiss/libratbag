@@ -103,6 +103,13 @@ msg(const char *fmt, ...)
 	va_end(args);
 }
 
+static inline int
+path_exists(const char *filename)
+{
+	struct stat st;
+	return !stat(filename, &st);
+}
+
 static inline struct udev_device*
 udev_device_from_path(struct udev *udev, const char *path)
 {
@@ -217,7 +224,8 @@ main(int argc, char *argv[])
 	struct ratbag *ratbag;
 	struct window w = {};
 	uint32_t flags = 0;
-	const char *path;
+	const char *path, *svg_filename;
+	char svg_path[256];
 	GError *gerror = NULL;
 
 	ratbag = ratbag_create_context(&interface, NULL);
@@ -273,9 +281,25 @@ main(int argc, char *argv[])
 		goto out;
 	}
 
+	svg_filename = ratbag_device_get_svg_name(w.dev);
+	if (!svg_filename) {
+		error("Looks like '%s' has no graphics associated\n", path);
+		goto out;
+	}
+
 	rsvg_set_default_dpi (72.0);
 
-	w.svg_handle = rsvg_handle_new_from_file("data/etekcity.svg", &gerror);
+	snprintf(svg_path, sizeof(svg_path), "data/%s", svg_filename);
+
+	if (!path_exists(svg_path))
+		snprintf(svg_path, sizeof(svg_path), "../data/%s", svg_filename);
+
+	if (!path_exists(svg_path)) {
+		error("Unable to find '%s'\n", svg_filename);
+		goto out;
+	}
+
+	w.svg_handle = rsvg_handle_new_from_file(svg_path, &gerror);
 	if (gerror != NULL) {
 		error("%s\n", gerror->message);
 		goto out;
@@ -287,8 +311,8 @@ main(int argc, char *argv[])
 
 	gtk_main();
 
-	window_cleanup(&w);
 out:
+	window_cleanup(&w);
 	ratbag_unref(ratbag);
 
 	return 0;
