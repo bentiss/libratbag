@@ -965,7 +965,7 @@ int hidpp20_touchpad_fw_items_set(struct ratbag_device *device,
 	union hidpp20_message msg = {
 		.msg.report_id = REPORT_ID_LONG,
 		.msg.device_idx = 0xff,
-		.msg.address = CMD_TOUCHPAD_FW_ITEMS_GET,
+		.msg.address = CMD_TOUCHPAD_FW_ITEMS_SET,
 		.msg.parameters[0] = items->state,
 	};
 	int rc;
