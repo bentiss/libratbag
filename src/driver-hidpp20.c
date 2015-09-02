@@ -406,6 +406,7 @@ hidpp20drv_init_feature(struct ratbag_device *device, uint16_t feature)
 						 items.state & HIDDP20_TOUCHPAD_FW_ITEMS_TAP_TO_CLICK ? "Enabled" : "Disabled");
 			}
 		}
+		break;
 	}
 	default:
 		log_raw(device->ratbag, "unknown feature 0x%04x\n", feature);
