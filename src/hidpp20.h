@@ -238,6 +238,8 @@ int hidpp20_adjustable_dpi_set_sensor_dpi(struct ratbag_device *device,
 #define HIDPP_PAGE_TOUCHPAD_FW_ITEMS			0x6010
 
 #define HIDDP20_TOUCHPAD_FW_ITEMS_TAP_TO_CLICK		(1 << 0)
+#define HIDDP20_TOUCHPAD_FW_ITEMS_TWO_FINGERS_TAP	(1 << 6)
+#define HIDDP20_TOUCHPAD_FW_ITEMS_TAP_AND_HOLD		(1 << 7)
 
 struct hidpp20_touchpad_fw_items {
 	uint8_t presence;

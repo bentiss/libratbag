@@ -393,8 +393,10 @@ hidpp20drv_init_feature(struct ratbag_device *device, uint16_t feature)
 		 * this */
 		if (!hidpp20_touchpad_fw_items_get(device, &items)) {
 			if (items.presence & HIDDP20_TOUCHPAD_FW_ITEMS_TAP_TO_CLICK) {
-				/* we toggle the tap enable bit */
-				items.state ^= HIDDP20_TOUCHPAD_FW_ITEMS_TAP_TO_CLICK;
+				/* we toggle the tap enable bits */
+				items.state ^= (HIDDP20_TOUCHPAD_FW_ITEMS_TAP_TO_CLICK |
+					        HIDDP20_TOUCHPAD_FW_ITEMS_TWO_FINGERS_TAP |
+					        HIDDP20_TOUCHPAD_FW_ITEMS_TAP_AND_HOLD);
 				if (hidpp20_touchpad_fw_items_set(device, &items))
 					log_error(device->ratbag,
 						  "unable to toggle the 'tap to click' functionality\n");
