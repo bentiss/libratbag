@@ -54,6 +54,7 @@ struct window {
 	RsvgHandle *svg_handle;
 
 	struct ratbag_device *dev;
+	struct ratbag_profile *current_profile;
 };
 
 static void
@@ -123,6 +124,7 @@ static void
 window_cleanup(struct window *w)
 {
 	w->dev = ratbag_device_unref(w->dev);
+	w->current_profile = ratbag_profile_unref(w->current_profile);
 	xmlFreeDoc(w->doc);
 }
 
@@ -138,6 +140,7 @@ update_svg_text_from_device(struct window *w, xmlNode *node)
 		index = atoi(content + 6);
 		/* FIXME: update the node with the actual value */
 		printf("node button %d\n", index);
+		xmlNodeSetContent(node, "coucou");
 		return;
 	}
 
@@ -185,6 +188,7 @@ main(int argc, char *argv[])
 	GError *gerror = NULL;
 	xmlChar *xmlbuff;
 	int buffersize;
+	unsigned int num_profiles, i;
 
 	ratbag = ratbag_create_context(&interface, NULL);
 	if (!ratbag) {
@@ -236,6 +240,24 @@ main(int argc, char *argv[])
 	w.dev = ratbag_cmd_open_device(ratbag, path);
 	if (!w.dev) {
 		error("Looks like '%s' is not supported\n", path);
+		goto out;
+	}
+
+	num_profiles = ratbag_device_get_num_profiles(w.dev);
+	for (i = 0; i < num_profiles; i++) {
+		struct ratbag_profile *profile;
+
+		profile = ratbag_device_get_profile_by_index(w.dev, i);
+		if (ratbag_profile_is_active(profile)) {
+			w.current_profile = profile;
+			break;
+		}
+
+		ratbag_profile_unref(profile);
+	}
+
+	if (!w.current_profile) {
+		error("Unable to retrieve the current profile\n");
 		goto out;
 	}
 
