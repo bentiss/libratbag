@@ -50,11 +50,11 @@ struct window {
 	GtkWidget *area;
 	int width, height; /* of window */
 
-	xmlDocPtr doc;
 	RsvgHandle *svg_handle;
 
 	struct ratbag_device *dev;
 	struct ratbag_profile *current_profile;
+	char svg_path[256];
 };
 
 static void
@@ -125,7 +125,6 @@ window_cleanup(struct window *w)
 {
 	w->dev = ratbag_device_unref(w->dev);
 	w->current_profile = ratbag_profile_unref(w->current_profile);
-	xmlFreeDoc(w->doc);
 }
 
 static void
@@ -183,14 +182,63 @@ update_svg_node_from_device(struct window *w, xmlNode *node)
 	}
 }
 
-static void
+static int
 update_svg_from_device(struct window *w)
 {
+	unsigned int num_profiles, i;
 	xmlNode *root_element = NULL;
+	xmlChar *xmlbuff = NULL;
+	xmlDocPtr doc = NULL;
+	GError *gerror = NULL;
+	int buffersize;
+	int rc = -EINVAL;
 
-	root_element = xmlDocGetRootElement(w->doc);
+	w->current_profile = ratbag_profile_unref(w->current_profile);
+
+	num_profiles = ratbag_device_get_num_profiles(w->dev);
+	for (i = 0; i < num_profiles; i++) {
+		struct ratbag_profile *profile;
+
+		profile = ratbag_device_get_profile_by_index(w->dev, i);
+		if (ratbag_profile_is_active(profile)) {
+			w->current_profile = profile;
+			break;
+		}
+
+		ratbag_profile_unref(profile);
+	}
+
+	if (!w->current_profile) {
+		error("Unable to retrieve the current profile\n");
+		goto out;
+	}
+
+	doc = xmlReadFile(w->svg_path, NULL, 0);
+	if (!doc) {
+		error("unable to parse '%s'\n", w->svg_path);
+		goto out;
+	}
+
+	root_element = xmlDocGetRootElement(doc);
 
 	update_svg_node_from_device(w, root_element);
+
+	xmlDocDumpFormatMemory(doc, &xmlbuff, &buffersize, 1);
+
+	w->svg_handle = rsvg_handle_new_from_data(xmlbuff, buffersize, &gerror);
+	if (gerror != NULL) {
+		error("%s\n", gerror->message);
+		goto out;
+	}
+
+	rc = 0;
+
+out:
+	if (doc)
+		xmlFreeDoc(doc);
+	xmlCleanupParser();
+	xmlFree(xmlbuff);
+	return rc;
 }
 
 int
@@ -200,11 +248,6 @@ main(int argc, char *argv[])
 	struct window w = {};
 	uint32_t flags = 0;
 	const char *path, *svg_filename;
-	char svg_path[256];
-	GError *gerror = NULL;
-	xmlChar *xmlbuff = NULL;
-	int buffersize;
-	unsigned int num_profiles, i;
 
 	ratbag = ratbag_create_context(&interface, NULL);
 	if (!ratbag) {
@@ -259,24 +302,6 @@ main(int argc, char *argv[])
 		goto out;
 	}
 
-	num_profiles = ratbag_device_get_num_profiles(w.dev);
-	for (i = 0; i < num_profiles; i++) {
-		struct ratbag_profile *profile;
-
-		profile = ratbag_device_get_profile_by_index(w.dev, i);
-		if (ratbag_profile_is_active(profile)) {
-			w.current_profile = profile;
-			break;
-		}
-
-		ratbag_profile_unref(profile);
-	}
-
-	if (!w.current_profile) {
-		error("Unable to retrieve the current profile\n");
-		goto out;
-	}
-
 	svg_filename = ratbag_device_get_svg_name(w.dev);
 	if (!svg_filename) {
 		error("Looks like '%s' has no graphics associated\n", path);
@@ -285,31 +310,18 @@ main(int argc, char *argv[])
 
 	rsvg_set_default_dpi (72.0);
 
-	snprintf(svg_path, sizeof(svg_path), "data/%s", svg_filename);
+	snprintf(w.svg_path, sizeof(w.svg_path), "data/%s", svg_filename);
 
-	if (!path_exists(svg_path))
-		snprintf(svg_path, sizeof(svg_path), "../data/%s", svg_filename);
+	if (!path_exists(w.svg_path))
+		snprintf(w.svg_path, sizeof(w.svg_path), "../data/%s", svg_filename);
 
-	if (!path_exists(svg_path)) {
+	if (!path_exists(w.svg_path)) {
 		error("Unable to find '%s'\n", svg_filename);
-		goto out;
-	}
-
-	w.doc = xmlReadFile(svg_path, NULL, 0);
-	if (!w.doc) {
-		error("unable to parse '%s'\n", svg_path);
 		goto out;
 	}
 
 	update_svg_from_device(&w);
 
-	xmlDocDumpFormatMemory(w.doc, &xmlbuff, &buffersize, 1);
-
-	w.svg_handle = rsvg_handle_new_from_data(xmlbuff, buffersize, &gerror);
-	if (gerror != NULL) {
-		error("%s\n", gerror->message);
-		goto out;
-	}
 
 	gtk_init(&argc, &argv);
 
@@ -318,8 +330,6 @@ main(int argc, char *argv[])
 	gtk_main();
 
 out:
-	xmlCleanupParser();
-	xmlFree(xmlbuff);
 	window_cleanup(&w);
 	ratbag_unref(ratbag);
 
