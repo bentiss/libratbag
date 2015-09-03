@@ -37,6 +37,7 @@
 #include <linux/input.h>
 
 #include <librsvg/rsvg.h>
+#include <libxml/parser.h>
 
 #include <gtk/gtk.h>
 #include <glib.h>
@@ -61,6 +62,7 @@ struct window {
 	GtkWidget *area;
 	int width, height; /* of window */
 
+	xmlDocPtr doc;
 	RsvgHandle *svg_handle;
 
 	struct ratbag_device *dev;
@@ -193,6 +195,7 @@ static void
 window_cleanup(struct window *w)
 {
 	w->dev = ratbag_device_unref(w->dev);
+	xmlFreeDoc(w->doc);
 }
 
 static int
@@ -227,6 +230,8 @@ main(int argc, char *argv[])
 	const char *path, *svg_filename;
 	char svg_path[256];
 	GError *gerror = NULL;
+	xmlChar *xmlbuff;
+	int buffersize;
 
 	ratbag = ratbag_create_context(&interface, NULL);
 	if (!ratbag) {
@@ -299,7 +304,15 @@ main(int argc, char *argv[])
 		goto out;
 	}
 
-	w.svg_handle = rsvg_handle_new_from_file(svg_path, &gerror);
+	w.doc = xmlReadFile(svg_path, NULL, 0);
+	if (!w.doc) {
+		error("unable to parse '%s'\n", svg_path);
+		goto out;
+	}
+
+	xmlDocDumpFormatMemory(w.doc, &xmlbuff, &buffersize, 1);
+
+	w.svg_handle = rsvg_handle_new_from_data(xmlbuff, buffersize, &gerror);
 	if (gerror != NULL) {
 		error("%s\n", gerror->message);
 		goto out;
@@ -312,6 +325,8 @@ main(int argc, char *argv[])
 	gtk_main();
 
 out:
+	xmlCleanupParser();
+	xmlFree(xmlbuff);
 	window_cleanup(&w);
 	ratbag_unref(ratbag);
 

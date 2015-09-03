@@ -119,6 +119,7 @@ if test "x$build_ratbaggui" = "xyes"; then
 	PKG_CHECK_MODULES(CAIRO, [cairo])
 	PKG_CHECK_MODULES(GTK, [glib-2.0 gtk+-3.0])
 	PKG_CHECK_MODULES(LIBRSVG, [librsvg-2.0])
+	PKG_CHECK_MODULES(LIBXML2, [libxml-2.0])
 fi
 AM_CONDITIONAL(BUILD_RATBAGGUI, [test "x$build_ratbaggui" = "xyes"])
 
