@@ -186,7 +186,7 @@ main(int argc, char *argv[])
 	const char *path, *svg_filename;
 	char svg_path[256];
 	GError *gerror = NULL;
-	xmlChar *xmlbuff;
+	xmlChar *xmlbuff = NULL;
 	int buffersize;
 	unsigned int num_profiles, i;
 
