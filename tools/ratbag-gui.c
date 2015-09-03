@@ -137,10 +137,16 @@ update_svg_text_from_device(struct window *w, xmlNode *node)
 	content = xmlNodeGetContent(node);
 
 	if (!strncasecmp(content, "button", 6)) {
+		struct ratbag_button *button;
 		index = atoi(content + 6);
-		/* FIXME: update the node with the actual value */
-		printf("node button %d\n", index);
-		xmlNodeSetContent(node, "coucou");
+		button = ratbag_profile_get_button_by_index(w->current_profile,
+							    index);
+		if (!button) {
+			xmlNodeSetContent(node, "XXXXXXXX");
+			return;
+		}
+
+		xmlNodeSetContent(node, button_action_to_str(button));
 		return;
 	}
 
