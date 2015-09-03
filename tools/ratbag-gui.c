@@ -186,6 +186,24 @@ update_svg_text_from_device(struct window *w, xmlNode *node)
 			 ratbag_resolution_get_dpi(resolution));
 		xmlNodeSetContent(node, buf);
 
+		if (ratbag_resolution_is_active(resolution)) {
+			xmlChar *prop = xmlGetProp(node, "style");
+			GRegex* regex = g_regex_new("font-weight:normal", 0, 0, NULL);
+			char* new_prop = g_regex_replace_literal(regex,
+								 prop,
+								 -1,
+								 0,
+								 "font-weight:bold",
+								 0,
+								 NULL);
+			g_regex_unref (regex);
+
+			xmlSetProp(node, "style", new_prop);
+
+			free(new_prop);
+			xmlFree(prop);
+		}
+
 		ratbag_resolution_unref(resolution);
 		goto out;
 	}
