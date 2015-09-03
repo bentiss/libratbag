@@ -126,6 +126,54 @@ window_cleanup(struct window *w)
 	xmlFreeDoc(w->doc);
 }
 
+static void
+update_svg_text_from_device(struct window *w, xmlNode *node)
+{
+	xmlChar *content = NULL;
+	int index;
+
+	content = xmlNodeGetContent(node);
+
+	if (!strncasecmp(content, "button", 6)) {
+		index = atoi(content + 6);
+		/* FIXME: update the node with the actual value */
+		printf("node button %d\n", index);
+		return;
+	}
+
+	if (!strncasecmp(content, "resolution", 10)) {
+		index = atoi(content + 10);
+		/* FIXME: update the node with the actual value */
+		printf("node resolution %d\n", index);
+		return;
+	}
+}
+
+static void
+update_svg_node_from_device(struct window *w, xmlNode *node)
+{
+	xmlNode *cur_node = NULL;
+
+	for (cur_node = node; cur_node; cur_node = cur_node->next) {
+		if (cur_node->type == XML_ELEMENT_NODE) {
+			if (!strcmp(cur_node->name, "text"))
+				update_svg_text_from_device(w, cur_node);
+		}
+
+		update_svg_node_from_device(w, cur_node->children);
+	}
+}
+
+static void
+update_svg_from_device(struct window *w)
+{
+	xmlNode *root_element = NULL;
+
+	root_element = xmlDocGetRootElement(w->doc);
+
+	update_svg_node_from_device(w, root_element);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -214,6 +262,8 @@ main(int argc, char *argv[])
 		error("unable to parse '%s'\n", svg_path);
 		goto out;
 	}
+
+	update_svg_from_device(&w);
 
 	xmlDocDumpFormatMemory(w.doc, &xmlbuff, &buffersize, 1);
 
