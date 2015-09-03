@@ -99,14 +99,6 @@ log_buffer(struct ratbag *ratbag,
 	buf_len += 1; /* terminating '\0' */
 
 	output_buf = zalloc(buf_len);
-	if (!output_buf) {
-		if (header)
-			log_msg(ratbag, priority, "%s ......", header);
-		else
-			log_msg(ratbag, priority, " ......");
-		return;
-	}
-
 	n = 0;
 	if (header)
 		n += sprintf(output_buf, "%s", header);
@@ -125,6 +117,18 @@ LIBRATBAG_EXPORT void
 ratbag_log_set_priority(struct ratbag *ratbag,
 			enum ratbag_log_priority priority)
 {
+	switch (priority) {
+	case RATBAG_LOG_PRIORITY_RAW:
+	case RATBAG_LOG_PRIORITY_DEBUG:
+	case RATBAG_LOG_PRIORITY_INFO:
+	case RATBAG_LOG_PRIORITY_ERROR:
+		break;
+	default:
+		log_bug_client(ratbag,
+			       "Invalid log priority %d. Using INFO instead\n",
+			       priority);
+		return;
+	}
 	ratbag->log_priority = priority;
 }
 
@@ -139,18 +143,6 @@ ratbag_log_set_handler(struct ratbag *ratbag,
 		       ratbag_log_handler log_handler)
 {
 	ratbag->log_handler = log_handler;
-}
-
-void
-ratbag_device_set_hidraw_device(struct ratbag_device *device,
-				struct udev_device *hidraw)
-{
-	udev_device_unref(device->udev_hidraw);
-	device->udev_hidraw = udev_device_ref(hidraw);
-
-	log_debug(device->ratbag,
-		  "Overriding hidraw device with %s\n",
-		  udev_device_get_syspath(hidraw));
 }
 
 static inline struct udev_device *
@@ -228,19 +220,16 @@ out:
 }
 
 static int
-ratbag_device_init_udev(struct ratbag_device *device,
+ratbag_device_init_hidraw(struct ratbag_device *device,
 			struct udev_device *udev_device)
 {
 	struct udev_device *hidraw_udev;
 	int rc = -ENODEV;
 
-	device->udev_device = udev_device_ref(udev_device);
-
 	hidraw_udev = udev_find_hidraw(device);
 	if (!hidraw_udev)
 		goto out;
 
-	/* Note: may be overridden later */
 	device->udev_hidraw = udev_device_ref(hidraw_udev);
 
 	log_debug(device->ratbag,
@@ -254,12 +243,58 @@ out:
 	return rc;
 }
 
-static void
-ratbag_device_init(struct ratbag_device *device)
+static struct ratbag_device*
+ratbag_device_new(struct ratbag *ratbag, struct udev_device *udev_device,
+		  const char *name, const struct input_id *id)
 {
+	struct ratbag_device *device = NULL;
+
+	device = zalloc(sizeof(*device));
+	device->name = strdup(name);
+
+	if (!name) {
+		free(device);
+		return NULL;
+	}
+
+	device->ratbag = ratbag_ref(ratbag);
 	device->hidraw_fd = -1;
 	device->refcount = 1;
+	device->udev_device = udev_device_ref(udev_device);
+
+	device->ids = *id;
 	list_init(&device->profiles);
+
+
+	return device;
+}
+
+static void
+ratbag_device_destroy(struct ratbag_device *device)
+{
+	struct ratbag_profile *profile, *next;
+
+	if (!device)
+		return;
+
+	if (device->driver && device->driver->remove)
+		device->driver->remove(device);
+
+	/* the profiles are created during probe(), we should unref them */
+	list_for_each_safe(profile, next, &device->profiles, link)
+		ratbag_profile_unref(profile);
+
+	if (device->udev_device)
+		udev_device_unref(device->udev_device);
+	if (device->udev_hidraw)
+		udev_device_unref(device->udev_hidraw);
+
+	if (device->hidraw_fd >= 0)
+		close(device->hidraw_fd);
+
+	ratbag_unref(device->ratbag);
+	free(device->name);
+	free(device);
 }
 
 static inline bool
@@ -351,48 +386,45 @@ ratbag_device_new_from_udev_device(struct ratbag *ratbag,
 	int rc;
 	struct ratbag_device *device = NULL;
 	struct ratbag_driver *driver;
+	char *name = NULL;
+	struct input_id id;
 
 	if (!ratbag) {
 		fprintf(stderr, "ratbag is NULL\n");
 		return NULL;
 	}
 
-	device = zalloc(sizeof(*device));
-	if (!device)
-		return NULL;
 
-	device->ratbag = ratbag_ref(ratbag);
-	if (get_product_id(udev_device, &device->ids) != 0)
+	if (get_product_id(udev_device, &id) != 0)
 		goto out_err;
-	free(device->name);
-	device->name = get_device_name(udev_device);
-	if (!device->name) {
+
+	name = get_device_name(udev_device);
+	if (!name) {
 		errno = ENOMEM;
 		goto out_err;
 	}
 
-	ratbag_device_init(device);
-	rc = ratbag_device_init_udev(device, udev_device);
+	device = ratbag_device_new(ratbag, udev_device, name, &id);
+	free(name);
+
+	if (!device)
+		goto out_err;
+
+	rc = ratbag_device_init_hidraw(device, udev_device);
 	if (rc)
 		goto out_err;
 
 	driver = ratbag_find_driver(device, &device->ids);
 	if (!driver) {
 		errno = ENOTSUP;
-		goto err_udev;
+		goto out_err;
 	}
 
 	return device;
 
-err_udev:
-	udev_device_unref(device->udev_device);
-	udev_device_unref(device->udev_hidraw);
 out_err:
-	if (device) {
-		free(device->name);
-		device->ratbag = ratbag_unref(device->ratbag);
-	}
-	free(device);
+	ratbag_device_destroy(device);
+
 	return NULL;
 }
 
@@ -406,7 +438,6 @@ ratbag_device_ref(struct ratbag_device *device)
 LIBRATBAG_EXPORT struct ratbag_device *
 ratbag_device_unref(struct ratbag_device *device)
 {
-	struct ratbag_profile *profile, *next;
 	if (device == NULL)
 		return NULL;
 
@@ -415,22 +446,8 @@ ratbag_device_unref(struct ratbag_device *device)
 	if (device->refcount > 0)
 		return device;
 
-	if (device->driver->remove)
-		device->driver->remove(device);
+	ratbag_device_destroy(device);
 
-	/* the profiles are created during probe(), we should unref them */
-	list_for_each_safe(profile, next, &device->profiles, link)
-		ratbag_profile_unref(profile);
-
-	udev_device_unref(device->udev_device);
-	udev_device_unref(device->udev_hidraw);
-
-	if (device->hidraw_fd >= 0)
-		close(device->hidraw_fd);
-
-	device->ratbag = ratbag_unref(device->ratbag);
-	free(device->name);
-	free(device);
 	return NULL;
 }
 
@@ -473,9 +490,6 @@ ratbag_create_context(const struct ratbag_interface *interface,
 		return NULL;
 
 	ratbag = zalloc(sizeof(*ratbag));
-	if (!ratbag)
-		return NULL;
-
 	ratbag->refcount = 1;
 	ratbag->interface = interface;
 	ratbag->userdata = userdata;
@@ -528,9 +542,6 @@ ratbag_create_button(struct ratbag_profile *profile, unsigned int index)
 	struct ratbag_button *button;
 
 	button = zalloc(sizeof(*button));
-	if (!button)
-		return NULL;
-
 	button->refcount = 1;
 	button->profile = profile;
 	button->index = index;
@@ -565,9 +576,6 @@ ratbag_create_profile(struct ratbag_device *device,
 	unsigned i;
 
 	profile = zalloc(sizeof(*profile));
-	if (!profile)
-		return NULL;
-
 	profile->refcount = 1;
 	profile->device = device;
 	profile->index = index;
@@ -674,6 +682,8 @@ ratbag_profile_is_active(struct ratbag_profile *profile)
 LIBRATBAG_EXPORT int
 ratbag_profile_is_default(struct ratbag_profile *profile)
 {
+	/* FIXME: unclear if any device actually supports this function */
+
 	return profile->is_default;
 }
 
@@ -730,6 +740,8 @@ ratbag_profile_set_default(struct ratbag_profile *profile)
 	struct ratbag_device *device = profile->device;
 	struct ratbag_profile *p;
 	int rc;
+
+	/* FIXME: unclear if any device actually supports this function */
 
 	assert(device->driver->write_profile);
 	rc = device->driver->write_profile(profile);

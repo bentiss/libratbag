@@ -368,13 +368,6 @@ ratbag_resolution_set_cap(struct ratbag_resolution *res,
 	res->capabilities = (1 << cap);
 }
 
-/**
- * Override the auto-picked hidraw device.
- */
-void
-ratbag_device_set_hidraw_device(struct ratbag_device *device,
-				struct udev_device *hidraw);
-
 void
 log_msg_va(struct ratbag *ratbag,
 	   enum ratbag_log_priority priority,
@@ -395,7 +388,7 @@ log_buffer(struct ratbag *ratbag,
 #define log_error(li_, ...) log_msg((li_), RATBAG_LOG_PRIORITY_ERROR, __VA_ARGS__)
 #define log_bug_kernel(li_, ...) log_msg((li_), RATBAG_LOG_PRIORITY_ERROR, "kernel bug: " __VA_ARGS__)
 #define log_bug_libratbag(li_, ...) log_msg((li_), RATBAG_LOG_PRIORITY_ERROR, "libratbag bug: " __VA_ARGS__)
-#define log_bug_client(li_, ...) log_msg((li_), LIBRATBAG_LOG_PRIORITY_ERROR, "client bug: " __VA_ARGS__)
+#define log_bug_client(li_, ...) log_msg((li_), RATBAG_LOG_PRIORITY_ERROR, "client bug: " __VA_ARGS__)
 #define log_buf_raw(li_, h_, buf_, len_) log_buffer(li_, RATBAG_LOG_PRIORITY_RAW, h_, buf_, len_)
 #define log_buf_debug(li_, h_, buf_, len_) log_buffer(li_, RATBAG_LOG_PRIORITY_DEBUG, h_, buf_, len_)
 #define log_buf_info(li_, h_, buf_, len_) log_buffer(li_, RATBAG_LOG_PRIORITY_INFO, h_, buf_, len_)
