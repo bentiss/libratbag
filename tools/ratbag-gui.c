@@ -151,9 +151,19 @@ update_svg_text_from_device(struct window *w, xmlNode *node)
 	}
 
 	if (!strncasecmp(content, "resolution", 10)) {
+		struct ratbag_resolution *resolution;
+		char buf[64];
 		index = atoi(content + 10);
-		/* FIXME: update the node with the actual value */
-		printf("node resolution %d\n", index);
+		resolution = ratbag_profile_get_resolution(w->current_profile,
+							   index);
+		if (!resolution) {
+			xmlNodeSetContent(node, "YYYYYYYY");
+			return;
+		}
+
+		snprintf(buf, sizeof(buf), "%d: %d dpi", index,
+			 ratbag_resolution_get_dpi(resolution));
+		xmlNodeSetContent(node, buf);
 		return;
 	}
 }
