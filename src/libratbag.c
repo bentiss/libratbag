@@ -243,7 +243,7 @@ out:
 	return rc;
 }
 
-static struct ratbag_device*
+struct ratbag_device*
 ratbag_device_new(struct ratbag *ratbag, struct udev_device *udev_device,
 		  const char *name, const struct input_id *id)
 {
@@ -260,7 +260,8 @@ ratbag_device_new(struct ratbag *ratbag, struct udev_device *udev_device,
 	device->ratbag = ratbag_ref(ratbag);
 	device->hidraw_fd = -1;
 	device->refcount = 1;
-	device->udev_device = udev_device_ref(udev_device);
+	if (udev_device)
+		device->udev_device = udev_device_ref(udev_device);
 
 	device->ids = *id;
 	list_init(&device->profiles);
@@ -269,7 +270,7 @@ ratbag_device_new(struct ratbag *ratbag, struct udev_device *udev_device,
 	return device;
 }
 
-static void
+void
 ratbag_device_destroy(struct ratbag_device *device)
 {
 	struct ratbag_profile *profile, *next;
@@ -298,6 +299,83 @@ ratbag_device_destroy(struct ratbag_device *device)
 }
 
 static inline bool
+ratbag_sanity_check_device(struct ratbag_device *device)
+{
+	struct ratbag *ratbag = device->ratbag;
+	struct ratbag_profile *profile = NULL;
+	struct ratbag_resolution *res = NULL;
+	bool has_active = false;
+	bool has_default = false;
+	unsigned int nres, nprofiles;
+	bool rc = false;
+	unsigned int i;
+
+	/* arbitrary number: max 16 profiles, does any mouse have more? but
+	 * since we have num_profiles unsigned, it also checks for
+	 * accidental negative */
+	if (device->num_profiles == 0 || device->num_profiles > 16) {
+		log_bug_libratbag(ratbag,
+				  "%s: invalid number of profiles %d\n",
+				  device->name,
+				  device->num_profiles);
+		goto out;
+	}
+
+	nprofiles = ratbag_device_get_num_profiles(device);
+	for (i = 0; i < nprofiles; i++) {
+		profile = ratbag_device_get_profile_by_index(device, i);
+		/* Allow max 1 default profile */
+		if (profile->is_default) {
+			if (has_default) {
+				log_bug_libratbag(ratbag,
+						  "%s: multiple default profiles\n",
+						  device->name);
+				goto out;
+			}
+			has_default = true;
+		}
+
+		/* Allow max 1 active profile */
+		if (profile->is_active) {
+			if (has_active) {
+				log_bug_libratbag(ratbag,
+						  "%s: multiple active profiles\n",
+						  device->name);
+				goto out;
+			}
+			has_active = true;
+		}
+
+		nres = ratbag_profile_get_num_resolutions(profile);
+		if (nres == 0 || nres > 16) {
+				log_bug_libratbag(ratbag,
+						  "%s: minimum 1 resolution required\n",
+						  device->name);
+				goto out;
+		}
+
+		ratbag_profile_unref(profile);
+		profile = NULL;
+	}
+
+	/* Require 1 active profile */
+	if (!has_active) {
+		log_bug_libratbag(ratbag,
+				  "%s: no active profile found\n",
+				  device->name);
+		goto out;
+	}
+
+	rc = true;
+
+out:
+	ratbag_profile_unref(profile);
+	ratbag_resolution_unref(res);
+
+	return rc;
+}
+
+static inline bool
 ratbag_match_id(const struct input_id *dev_id, const struct input_id *match_id)
 {
 	return (match_id->bustype == BUS_ANY || match_id->bustype == dev_id->bustype) &&
@@ -306,14 +384,18 @@ ratbag_match_id(const struct input_id *dev_id, const struct input_id *match_id)
 		(match_id->version == VERSION_ANY || match_id->version == dev_id->version);
 }
 
-static struct ratbag_driver *
-ratbag_find_driver(struct ratbag_device *device, const struct input_id *dev_id)
+struct ratbag_driver *
+ratbag_find_driver(struct ratbag_device *device,
+		   const struct input_id *dev_id,
+		   struct ratbag_test_device *test_device)
 {
 	struct ratbag *ratbag = device->ratbag;
 	struct ratbag_driver *driver;
 	const struct ratbag_id *matching_id;
 	struct ratbag_id matched_id;
 	int rc;
+
+	matched_id.test_device = test_device;
 
 	list_for_each(driver, &ratbag->drivers, link) {
 		log_debug(ratbag, "trying driver '%s'\n", driver->name);
@@ -326,9 +408,14 @@ ratbag_find_driver(struct ratbag_device *device, const struct input_id *dev_id)
 				device->driver = driver;
 				rc = driver->probe(device, matched_id);
 				if (rc == 0) {
-					log_debug(ratbag, "driver match found\n");
-					device->svg_name = matching_id->svg_filename;
-					return driver;
+					if (!ratbag_sanity_check_device(device)) {
+						driver->remove(device);
+						return NULL;
+					} else {
+						log_debug(ratbag, "driver match found\n");
+						device->svg_name = matching_id->svg_filename;
+						return driver;
+					}
 				}
 
 				device->driver = NULL;
@@ -394,6 +481,10 @@ ratbag_device_new_from_udev_device(struct ratbag *ratbag,
 		return NULL;
 	}
 
+	if (!udev_device) {
+		log_bug_client(ratbag, "udev device is NULL.\n");
+		return NULL;
+	}
 
 	if (get_product_id(udev_device, &id) != 0)
 		goto out_err;
@@ -414,7 +505,7 @@ ratbag_device_new_from_udev_device(struct ratbag *ratbag,
 	if (rc)
 		goto out_err;
 
-	driver = ratbag_find_driver(device, &device->ids);
+	driver = ratbag_find_driver(device, &device->ids, NULL);
 	if (!driver) {
 		errno = ENOTSUP;
 		goto out_err;
@@ -463,7 +554,7 @@ ratbag_device_get_svg_name(const struct ratbag_device* device)
 	return device->svg_name;
 }
 
-static void
+void
 ratbag_register_driver(struct ratbag *ratbag, struct ratbag_driver *driver)
 {
 	if (!driver->name) {
