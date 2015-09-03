@@ -21,7 +21,7 @@ if BUILD_RATBAGGUI
 noinst_PROGRAMS += ratbag-gui
 
 ratbag_gui_SOURCES = ratbag-gui.c
-ratbag_gui_LDADD = ../src/libratbag.la $(CAIRO_LIBS) $(GTK_LIBS) $(LIBUDEV_LIBS) $(LIBRSVG_LIBS) $(LIBXML2_LIBS)
-ratbag_gui_CFLAGS = $(CAIRO_CFLAGS) $(GTK_CFLAGS) $(LIBUDEV_CFLAGS) $(LIBRSVG_CFLAGS) $(LIBXML2_CFLAGS)
+ratbag_gui_LDADD = ../src/libratbag.la libshared.la $(CAIRO_LIBS) $(GTK_LIBS) $(LIBUDEV_LIBS) $(LIBRSVG_LIBS) $(LIBXML2_LIBS) $(LIBEVDEV_LIBS)
+ratbag_gui_CFLAGS = $(CAIRO_CFLAGS) $(GTK_CFLAGS) $(LIBUDEV_CFLAGS) $(LIBRSVG_CFLAGS) $(LIBXML2_CFLAGS) $(LIBEVDEV_CFLAGS)
 ratbag_gui_LDFLAGS = -no-install
 endif

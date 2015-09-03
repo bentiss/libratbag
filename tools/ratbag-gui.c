@@ -20,21 +20,9 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
-#define _GNU_SOURCE
-#include <config.h>
+#include "shared.h"
 
 #include <cairo.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <getopt.h>
-#include <sys/stat.h>
-#include <linux/input.h>
 
 #include <librsvg/rsvg.h>
 #include <libxml/parser.h>
@@ -68,19 +56,6 @@ struct window {
 	struct ratbag_device *dev;
 };
 
-static int
-error(const char *fmt, ...)
-{
-	va_list args;
-	fprintf(stderr, "error: ");
-
-	va_start(args, fmt);
-	vfprintf(stderr, fmt, args);
-	va_end(args);
-
-	return EXIT_FAILURE;
-}
-
 static void
 usage(void)
 {
@@ -110,53 +85,6 @@ path_exists(const char *filename)
 {
 	struct stat st;
 	return !stat(filename, &st);
-}
-
-static inline struct udev_device*
-udev_device_from_path(struct udev *udev, const char *path)
-{
-	struct udev_device *udev_device;
-	const char *event_node_prefix = "/dev/input/event";
-
-	if (strncmp(path, event_node_prefix, strlen(event_node_prefix)) == 0) {
-		struct stat st;
-		if (stat(path, &st) == -1) {
-			error("Failed to stat '%s': %s\n", path, strerror(errno));
-			return NULL;
-		}
-		udev_device = udev_device_new_from_devnum(udev, 'c', st.st_rdev);
-
-	} else {
-		udev_device = udev_device_new_from_syspath(udev, path);
-	}
-	if (!udev_device) {
-		error("Can't open '%s': %s\n", path, strerror(errno));
-		return NULL;
-	}
-
-	return udev_device;
-}
-
-static struct ratbag_device *
-ratbag_cmd_open_device(struct ratbag *ratbag, const char *path)
-{
-	struct ratbag_device *device;
-	struct udev *udev;
-	struct udev_device *udev_device;
-
-	udev = udev_new();
-	udev_device = udev_device_from_path(udev, path);
-	if (!udev_device) {
-		udev_unref(udev);
-		return NULL;
-	}
-
-	device = ratbag_device_new_from_udev_device(ratbag, udev_device);
-
-	udev_device_unref(udev_device);
-	udev_unref(udev);
-
-	return device;
 }
 
 static gboolean
@@ -197,29 +125,6 @@ window_cleanup(struct window *w)
 	w->dev = ratbag_device_unref(w->dev);
 	xmlFreeDoc(w->doc);
 }
-
-static int
-open_restricted(const char *path, int flags, void *user_data)
-{
-	int fd = open(path, flags);
-
-	if (fd < 0)
-		error("Failed to open %s (%s)\n",
-			path, strerror(errno));
-
-	return fd < 0 ? -errno : fd;
-}
-
-static void
-close_restricted(int fd, void *user_data)
-{
-	close(fd);
-}
-
-static const struct ratbag_interface interface = {
-	.open_restricted = open_restricted,
-	.close_restricted = close_restricted,
-};
 
 int
 main(int argc, char *argv[])
