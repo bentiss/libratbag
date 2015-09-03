@@ -33,8 +33,6 @@
 #include <libratbag.h>
 #include <libratbag-util.h>
 
-#define clip(val_, min_, max_) min((max_), max((min_), (val_)))
-
 enum options {
 	OPT_VERBOSE,
 	OPT_HELP,
@@ -52,10 +50,16 @@ struct window {
 
 	RsvgHandle *svg_handle;
 
+	const char *path;
 	struct ratbag_device *dev;
 	struct ratbag_profile *current_profile;
 	char svg_path[256];
 };
+
+static int
+update_svg_from_device(struct window *w, int update);
+
+static struct ratbag *ratbag;
 
 static void
 usage(void)
@@ -98,6 +102,18 @@ draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 	return TRUE;
 }
 
+static gboolean
+button_release_event(GtkWidget *widget, cairo_t *cr, gpointer data)
+{
+	struct window *w = data;
+
+	update_svg_from_device(w, 1);
+
+	gtk_widget_queue_draw (w->win);
+
+	return TRUE;
+}
+
 static void
 window_init(struct window *w)
 {
@@ -112,6 +128,7 @@ window_init(struct window *w)
 	gtk_window_set_resizable(GTK_WINDOW(w->win), TRUE);
 	gtk_widget_realize(w->win);
 	g_signal_connect(G_OBJECT(w->win), "delete-event", G_CALLBACK(gtk_main_quit), NULL);
+	g_signal_connect(G_OBJECT(w->win), "button-release-event", G_CALLBACK(button_release_event), w);
 
 	w->area = gtk_drawing_area_new();
 	gtk_widget_set_events(w->area, 0);
@@ -193,7 +210,7 @@ update_svg_node_from_device(struct window *w, xmlNode *node)
 }
 
 static int
-update_svg_from_device(struct window *w)
+update_svg_from_device(struct window *w, int update)
 {
 	unsigned int num_profiles, i;
 	xmlNode *root_element = NULL;
@@ -202,6 +219,12 @@ update_svg_from_device(struct window *w)
 	GError *gerror = NULL;
 	int buffersize;
 	int rc = -EINVAL;
+
+	/* FIXME: libratbag should not require to requery the device */
+	if (update) {
+		w->dev = ratbag_device_unref(w->dev);
+		w->dev = ratbag_cmd_open_device(ratbag, w->path);
+	}
 
 	w->current_profile = ratbag_profile_unref(w->current_profile);
 
@@ -256,10 +279,9 @@ out:
 int
 main(int argc, char *argv[])
 {
-	struct ratbag *ratbag;
 	struct window w = {};
 	uint32_t flags = 0;
-	const char *path, *svg_filename;
+	const char *svg_filename;
 
 	ratbag = ratbag_create_context(&interface, NULL);
 	if (!ratbag) {
@@ -306,17 +328,17 @@ main(int argc, char *argv[])
 	else if (flags & FLAG_VERBOSE)
 		ratbag_log_set_priority(ratbag, RATBAG_LOG_PRIORITY_DEBUG);
 
-	path = argv[optind];
+	w.path = argv[optind];
 
-	w.dev = ratbag_cmd_open_device(ratbag, path);
+	w.dev = ratbag_cmd_open_device(ratbag, w.path);
 	if (!w.dev) {
-		error("Looks like '%s' is not supported\n", path);
+		error("Looks like '%s' is not supported\n", w.path);
 		goto out;
 	}
 
 	svg_filename = ratbag_device_get_svg_name(w.dev);
 	if (!svg_filename) {
-		error("Looks like '%s' has no graphics associated\n", path);
+		error("Looks like '%s' has no graphics associated\n", w.path);
 		goto out;
 	}
 
@@ -332,7 +354,7 @@ main(int argc, char *argv[])
 		goto out;
 	}
 
-	if (update_svg_from_device(&w))
+	if (update_svg_from_device(&w, 0))
 		goto out;
 
 	gtk_init(&argc, &argv);
