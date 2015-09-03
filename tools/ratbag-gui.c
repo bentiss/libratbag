@@ -125,6 +125,9 @@ window_cleanup(struct window *w)
 {
 	w->dev = ratbag_device_unref(w->dev);
 	w->current_profile = ratbag_profile_unref(w->current_profile);
+	if (w->svg_handle)
+		g_object_unref(w->svg_handle);
+	w->svg_handle = NULL;
 }
 
 static void
@@ -142,11 +145,13 @@ update_svg_text_from_device(struct window *w, xmlNode *node)
 							    index);
 		if (!button) {
 			xmlNodeSetContent(node, "XXXXXXXX");
-			return;
+			goto out;
 		}
 
 		xmlNodeSetContent(node, button_action_to_str(button));
-		return;
+
+		ratbag_button_unref(button);
+		goto out;
 	}
 
 	if (!strncasecmp(content, "resolution", 10)) {
@@ -157,14 +162,19 @@ update_svg_text_from_device(struct window *w, xmlNode *node)
 							   index);
 		if (!resolution) {
 			xmlNodeSetContent(node, "YYYYYYYY");
-			return;
+			goto out;
 		}
 
 		snprintf(buf, sizeof(buf), "%d: %d dpi", index,
 			 ratbag_resolution_get_dpi(resolution));
 		xmlNodeSetContent(node, buf);
-		return;
+
+		ratbag_resolution_unref(resolution);
+		goto out;
 	}
+
+out:
+	xmlFree(content);
 }
 
 static void
@@ -225,6 +235,8 @@ update_svg_from_device(struct window *w)
 
 	xmlDocDumpFormatMemory(doc, &xmlbuff, &buffersize, 1);
 
+	if (w->svg_handle)
+		g_object_unref(w->svg_handle);
 	w->svg_handle = rsvg_handle_new_from_data(xmlbuff, buffersize, &gerror);
 	if (gerror != NULL) {
 		error("%s\n", gerror->message);
@@ -320,8 +332,8 @@ main(int argc, char *argv[])
 		goto out;
 	}
 
-	update_svg_from_device(&w);
-
+	if (update_svg_from_device(&w))
+		goto out;
 
 	gtk_init(&argc, &argv);
 
