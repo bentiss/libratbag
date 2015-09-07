@@ -360,7 +360,7 @@ main(int argc, char *argv[])
 		goto out;
 	}
 
-	rsvg_set_default_dpi (72.0);
+	rsvg_set_default_dpi (50.0);
 
 	snprintf(w.svg_path, sizeof(w.svg_path), "data/%s", svg_filename);
 
