@@ -667,14 +667,15 @@ etekcity_write_resolution_dpi(struct ratbag_resolution *resolution,
 	return 0;
 }
 
-static void
+static int
 etekcity_raw_event(struct ratbag_device *device, uint8_t *buf, int len)
 {
 	/* ignore mouse events */
 	if (buf[0] == 0x01)
-		return;
+		return 0;
 
 	log_buf_error(device->ratbag, "received: ", buf, len);
+	return 0;
 }
 
 static int

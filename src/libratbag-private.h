@@ -197,7 +197,7 @@ struct ratbag_driver {
 	int (*write_resolution_dpi)(struct ratbag_resolution *resolution,
 				    int dpi_x, int dpi_y);
 
-	void (*raw_event)(struct ratbag_device *device, uint8_t *buf, int len);
+	int (*raw_event)(struct ratbag_device *device, uint8_t *buf, int len);
 
 	/* private */
 	struct list link;

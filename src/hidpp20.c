@@ -116,12 +116,15 @@ hidpp20_request_command_allow_error(struct ratbag_device *device, union hidpp20_
 	 */
 	ratbag_hidraw_lock_events(device);
 	do {
-		ret = ratbag_hidraw_read_input_report(device, read_buffer.data, LONG_MESSAGE_LENGTH);
+		ret = ratbag_hidraw_read_input_report(device, read_buffer.data,
+						      LONG_MESSAGE_LENGTH, 0);
 		log_buf_raw(ratbag, " *** received: ", read_buffer.data, ret);
 
 		if (read_buffer.msg.report_id != REPORT_ID_SHORT &&
-		    read_buffer.msg.report_id != REPORT_ID_LONG)
+		    read_buffer.msg.report_id != REPORT_ID_LONG) {
+			ratbag_hidraw_propagate_report(device, read_buffer.data, ret);
 			continue;
+		}
 
 		/* actual answer */
 		if (read_buffer.msg.sub_id == msg->msg.sub_id &&
@@ -148,6 +151,7 @@ hidpp20_request_command_allow_error(struct ratbag_device *device, union hidpp20_
 					hidpp_err);
 			break;
 		}
+		ratbag_hidraw_propagate_report(device, read_buffer.data, ret);
 	} while (ret > 0);
 	ratbag_hidraw_unlock_events(device);
 

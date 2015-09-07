@@ -95,10 +95,24 @@ int ratbag_hidraw_output_report(struct ratbag_device *device, uint8_t *buf, size
  * @param device the ratbag device
  * @param[out] buf resulting raw data
  * @param len length of buf
+ * @param propagate notify or not the raw_event driver callback
  *
  * @return count of data transfered, or a negative errno on error
  */
-int ratbag_hidraw_read_input_report(struct ratbag_device *device, uint8_t *buf, size_t len);
+int ratbag_hidraw_read_input_report(struct ratbag_device *device, uint8_t *buf,
+				    size_t len, int propagate);
+
+/**
+ * Propagate an input report from the device to the raw_event driver callback
+ *
+ * @param device the ratbag device
+ * @param buf buffer containing the raw data
+ * @param len length of buf
+ *
+ * @return 0, or a negative errno on error
+ */
+int ratbag_hidraw_propagate_report(struct ratbag_device *device, uint8_t *buf,
+				   size_t len);
 
 /**
  * Start an event thread reader

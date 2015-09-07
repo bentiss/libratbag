@@ -90,8 +90,8 @@ ratbag_close_hidraw(struct ratbag_device *device)
 	pthread_mutex_destroy(&device->hidraw.lock);
 	pthread_mutex_destroy(&device->hidraw.grab_lock);
 
-	ratbag_close_fd(device, device->hidraw_fd);
-	device->hidraw_fd = -1;
+	ratbag_close_fd(device, device->hidraw.fd);
+	device->hidraw.fd = -1;
 }
 
 static int
@@ -144,7 +144,7 @@ hidraw_events_thread(void *data)
 
 	while (device->hidraw.use_thread) {
 		ratbag_hidraw_soft_lock_events(device);
-		ratbag_hidraw_read_input_report(device, &buf, 1);
+		ratbag_hidraw_read_input_report(device, &buf, 1, 1);
 		ratbag_hidraw_unlock_events(device);
 
 		/* we make sure the caller of the interrupt has taken the
@@ -248,7 +248,8 @@ ratbag_hidraw_output_report(struct ratbag_device *device, uint8_t *buf, size_t l
 #define HIDRAW_MAX_READ		4096
 
 int
-ratbag_hidraw_read_input_report(struct ratbag_device *device, uint8_t *buf, size_t len)
+ratbag_hidraw_read_input_report(struct ratbag_device *device, uint8_t *buf,
+				size_t len, int propagate)
 {
 	int rc;
 	struct pollfd fds[2] = {0};
@@ -282,9 +283,18 @@ ratbag_hidraw_read_input_report(struct ratbag_device *device, uint8_t *buf, size
 
 	len_read = (unsigned)rc;
 
-	if (device->driver->raw_event && device->hidraw.use_thread)
+	if (propagate && device->driver->raw_event)
 		device->driver->raw_event(device, read_buf, len_read);
 
 	memcpy(buf, read_buf, len_read < len ? len_read : len);
 	return rc;
+}
+
+int
+ratbag_hidraw_propagate_report(struct ratbag_device *device, uint8_t *buf, size_t len)
+{
+	if (!device->driver->raw_event)
+		return 0;
+
+	return device->driver->raw_event(device, buf, len);
 }

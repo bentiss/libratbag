@@ -136,7 +136,8 @@ hidpp10_request_command(struct hidpp10_device *dev, union hidpp10_message *msg)
 	 * loop until we get the actual answer or an error code.
 	 */
 	do {
-		ret = ratbag_hidraw_read_input_report(device, read_buffer.data, LONG_MESSAGE_LENGTH);
+		ret = ratbag_hidraw_read_input_report(device, read_buffer.data,
+						      LONG_MESSAGE_LENGTH, 0);
 
 		/* Overwrite the return device index with ours. The kernel
 		 * sets our device index on write, but gives us the real
