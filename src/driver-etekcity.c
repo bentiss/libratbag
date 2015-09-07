@@ -671,10 +671,18 @@ static int
 etekcity_raw_event(struct ratbag_device *device, uint8_t *buf, int len)
 {
 	/* ignore mouse events */
-	if (buf[0] == 0x01)
+	if (buf[0] != 0x03 || len < 4)
 		return 0;
 
-	log_buf_error(device->ratbag, "received: ", buf, len);
+	switch (buf[2]) {
+		case 0xb0:
+			ratbag_internal_resolution_set_active(device, buf[3] - 1);
+			break;
+		case 0x30:
+			ratbag_internal_profile_set_active(device, buf[3] - 1);
+			break;
+	}
+
 	return 0;
 }
 

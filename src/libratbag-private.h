@@ -420,5 +420,10 @@ ratbag_find_driver(struct ratbag_device *device,
 void
 ratbag_register_driver(struct ratbag *ratbag, struct ratbag_driver *driver);
 
+int
+ratbag_internal_profile_set_active(struct ratbag_device *device, unsigned int index);
+int
+ratbag_internal_resolution_set_active(struct ratbag_device *device, unsigned int index);
+
 #endif /* LIBRATBAG_PRIVATE_H */
 

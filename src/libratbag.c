@@ -851,6 +851,41 @@ ratbag_profile_set_active(struct ratbag_profile *profile)
 	return rc;
 }
 
+int
+ratbag_internal_profile_set_active(struct ratbag_device *device, unsigned int index)
+{
+	struct ratbag_profile *profile;
+
+	if (index > device->num_profiles)
+		return -EINVAL;
+
+	list_for_each(profile, &device->profiles, link) {
+		profile->is_active = profile->index == index;
+	}
+
+	return 0;
+}
+
+int
+ratbag_internal_resolution_set_active(struct ratbag_device *device, unsigned int index)
+{
+	struct ratbag_profile *profile;
+	unsigned i;
+
+	list_for_each(profile, &device->profiles, link) {
+		if (ratbag_profile_is_active(profile)) {
+			if (index >= profile->resolution.num_modes)
+				return -EINVAL;
+
+			for (i = 0; i < profile->resolution.num_modes; i++)
+				profile->resolution.modes[i].is_active = false;
+
+			profile->resolution.modes[index].is_active = true;
+		}
+	}
+	return 0;
+}
+
 LIBRATBAG_EXPORT int
 ratbag_profile_set_default(struct ratbag_profile *profile)
 {
