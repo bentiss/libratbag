@@ -74,6 +74,9 @@ struct ratbag_device {
 
 	unsigned num_buttons;
 
+	void(*user_event)(struct ratbag_device *device, void *data);
+	void *user_event_data;
+
 	void *drv_data;
 };
 
@@ -424,6 +427,13 @@ int
 ratbag_internal_profile_set_active(struct ratbag_device *device, unsigned int index);
 int
 ratbag_internal_resolution_set_active(struct ratbag_device *device, unsigned int index);
+
+static inline void
+notify_user(struct ratbag_device *device)
+{
+	if (device->user_event)
+		return device->user_event(device, device->user_event_data);
+}
 
 #endif /* LIBRATBAG_PRIVATE_H */
 

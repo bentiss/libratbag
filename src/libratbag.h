@@ -344,6 +344,11 @@ ratbag_device_new_from_udev_device(struct ratbag *ratbag,
 struct ratbag_device *
 ratbag_device_ref(struct ratbag_device *device);
 
+int
+ratbag_device_set_event_callback(struct ratbag_device *device,
+				 void(*event)(struct ratbag_device *device, void *data),
+				 void *data);
+
 /**
  * @ingroup device
  *

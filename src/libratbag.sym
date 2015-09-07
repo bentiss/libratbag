@@ -27,6 +27,7 @@ global:
 	ratbag_device_new_from_udev_device;
 	ratbag_device_new_test_device;
 	ratbag_device_ref;
+	ratbag_device_set_event_callback;
 	ratbag_device_set_user_data;
 	ratbag_device_unref;
 	ratbag_get_user_data;

@@ -55,6 +55,7 @@ struct window {
 	struct ratbag_profile *current_profile;
 	int current_profile_index;
 	char svg_path[256];
+	int updating;
 };
 
 static int
@@ -237,6 +238,19 @@ update_svg_node_from_device(struct window *w, xmlNode *node)
 	}
 }
 
+void
+ratbag_device_event(struct ratbag_device *device, void *data)
+{
+	struct window *w = (struct window*) data;
+
+	if (w->updating)
+		return;
+
+	update_svg_from_device(w, 0);
+
+	gtk_widget_queue_draw (w->win);
+}
+
 static int
 update_svg_from_device(struct window *w, int update)
 {
@@ -248,10 +262,13 @@ update_svg_from_device(struct window *w, int update)
 	int buffersize;
 	int rc = -EINVAL;
 
+	w->updating = 1;
+
 	/* FIXME: libratbag should not require to requery the device */
 	if (update) {
 		w->dev = ratbag_device_unref(w->dev);
 		w->dev = ratbag_cmd_open_device(ratbag, w->path);
+		ratbag_device_set_event_callback(w->dev, ratbag_device_event, w);
 	}
 
 	w->current_profile = ratbag_profile_unref(w->current_profile);
@@ -299,6 +316,7 @@ update_svg_from_device(struct window *w, int update)
 	rc = 0;
 
 out:
+	w->updating = 0;
 	if (doc)
 		xmlFreeDoc(doc);
 	xmlCleanupParser();
@@ -385,6 +403,9 @@ main(int argc, char *argv[])
 	}
 
 	if (update_svg_from_device(&w, 0))
+		goto out;
+
+	if (ratbag_device_set_event_callback(w.dev, ratbag_device_event, &w))
 		goto out;
 
 	gtk_init(&argc, &argv);

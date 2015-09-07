@@ -565,6 +565,16 @@ ratbag_device_get_svg_name(const struct ratbag_device* device)
 	return device->svg_name;
 }
 
+LIBRATBAG_EXPORT int
+ratbag_device_set_event_callback(struct ratbag_device *device,
+				 void (*event)(struct ratbag_device *device, void *data),
+				 void *data)
+{
+	device->user_event_data = data;
+	device->user_event = event;
+	return 0;
+}
+
 void
 ratbag_register_driver(struct ratbag *ratbag, struct ratbag_driver *driver)
 {
@@ -863,6 +873,8 @@ ratbag_internal_profile_set_active(struct ratbag_device *device, unsigned int in
 		profile->is_active = profile->index == index;
 	}
 
+	notify_user(device);
+
 	return 0;
 }
 
@@ -883,6 +895,9 @@ ratbag_internal_resolution_set_active(struct ratbag_device *device, unsigned int
 			profile->resolution.modes[index].is_active = true;
 		}
 	}
+
+	notify_user(device);
+
 	return 0;
 }
 
