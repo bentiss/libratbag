@@ -199,9 +199,9 @@ static struct etekcity_button_mapping etekcity_button_mapping[] = {
 	{ 14, BUTTON_ACTION_SPECIAL(RATBAG_BUTTON_ACTION_SPECIAL_RESOLUTION_UP) },
 	{ 15, BUTTON_ACTION_SPECIAL(RATBAG_BUTTON_ACTION_SPECIAL_RESOLUTION_DOWN) },
 	{ 16, BUTTON_ACTION_MACRO },
-	{ 17, BUTTON_ACTION_SPECIAL(RATBAG_BUTTON_ACTION_SPECIAL_PROFILE_CYCLE_UP) },
-	{ 18, BUTTON_ACTION_SPECIAL(RATBAG_BUTTON_ACTION_SPECIAL_PROFILE_UP) },
-	{ 19, BUTTON_ACTION_SPECIAL(RATBAG_BUTTON_ACTION_SPECIAL_PROFILE_DOWN) },
+	{ 18, BUTTON_ACTION_SPECIAL(RATBAG_BUTTON_ACTION_SPECIAL_PROFILE_CYCLE_UP) },
+	{ 19, BUTTON_ACTION_SPECIAL(RATBAG_BUTTON_ACTION_SPECIAL_PROFILE_UP) },
+	{ 20, BUTTON_ACTION_SPECIAL(RATBAG_BUTTON_ACTION_SPECIAL_PROFILE_DOWN) },
 	{ 25, BUTTON_ACTION_KEY(KEY_CONFIG) },
 	{ 26, BUTTON_ACTION_KEY(KEY_PREVIOUSSONG) },
 	{ 27, BUTTON_ACTION_KEY(KEY_NEXTSONG) },
@@ -503,9 +503,9 @@ etekcity_read_profile(struct ratbag_profile *profile, unsigned int index)
 		hz = report_rate;
 		if (!(setting_report->dpi_mask & (1 << i))) {
 			/* the profile is disabled, overwrite it */
-			resolution->dpi_x = 0;
-			resolution->dpi_y = 0;
-			resolution->hz = 0;
+			dpi_x = 0;
+			dpi_y = 0;
+			hz = 0;
 		}
 		resolution = ratbag_resolution_init(profile, i, dpi_x, dpi_y, hz);
 		ratbag_resolution_set_cap(resolution,
@@ -668,6 +668,25 @@ etekcity_write_resolution_dpi(struct ratbag_resolution *resolution,
 }
 
 static int
+etekcity_raw_event(struct ratbag_device *device, uint8_t *buf, int len)
+{
+	/* ignore mouse events */
+	if (buf[0] != 0x03 || len < 4)
+		return 0;
+
+	switch (buf[2]) {
+		case 0xb0:
+			ratbag_internal_resolution_set_active(device, buf[3] - 1);
+			break;
+		case 0x30:
+			ratbag_internal_profile_set_active(device, buf[3] - 1);
+			break;
+	}
+
+	return 0;
+}
+
+static int
 etekcity_probe(struct ratbag_device *device, const struct ratbag_id id)
 {
 	int rc;
@@ -720,6 +739,8 @@ etekcity_probe(struct ratbag_device *device, const struct ratbag_id id)
 		ratbag_device_get_name(device),
 		profile->index);
 
+	ratbag_hidraw_start_events(device);
+
 	return 0;
 
 err:
@@ -731,6 +752,8 @@ err:
 static void
 etekcity_remove(struct ratbag_device *device)
 {
+	ratbag_hidraw_stop_events(device);
+	ratbag_close_hidraw(device);
 	free(ratbag_get_drv_data(device));
 }
 
@@ -760,4 +783,5 @@ struct ratbag_driver etekcity_driver = {
 	.read_button = etekcity_read_button,
 	.write_button = etekcity_write_button,
 	.write_resolution_dpi = etekcity_write_resolution_dpi,
+	.raw_event = etekcity_raw_event,
 };

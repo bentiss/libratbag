@@ -31,6 +31,7 @@
 
 #include "libratbag.h"
 #include "libratbag-util.h"
+#include "libratbag-hidraw.h"
 
 #define BUS_ANY					0xffff
 #define VENDOR_ANY				0xffff
@@ -62,7 +63,7 @@ struct ratbag_device {
 
 	struct udev_device *udev_device;
 	struct udev_device *udev_hidraw;
-	int hidraw_fd;
+	struct ratbag_hidraw hidraw;
 	int refcount;
 	struct input_id ids;
 	struct ratbag_driver *driver;
@@ -195,6 +196,8 @@ struct ratbag_driver {
 	 */
 	int (*write_resolution_dpi)(struct ratbag_resolution *resolution,
 				    int dpi_x, int dpi_y);
+
+	int (*raw_event)(struct ratbag_device *device, uint8_t *buf, int len);
 
 	/* private */
 	struct list link;
@@ -336,7 +339,7 @@ ratbag_button_action_match(const struct ratbag_button_action *action,
 	case RATBAG_BUTTON_ACTION_TYPE_KEY:
 		return match->action.key.key == action->action.key.key;
 	case RATBAG_BUTTON_ACTION_TYPE_SPECIAL:
-		return match->action.special != action->action.special;
+		return match->action.special == action->action.special;
 	case RATBAG_BUTTON_ACTION_TYPE_MACRO:
 		/* FIXME: currently, do nothing */
 	default:
@@ -416,6 +419,11 @@ ratbag_find_driver(struct ratbag_device *device,
 
 void
 ratbag_register_driver(struct ratbag *ratbag, struct ratbag_driver *driver);
+
+int
+ratbag_internal_profile_set_active(struct ratbag_device *device, unsigned int index);
+int
+ratbag_internal_resolution_set_active(struct ratbag_device *device, unsigned int index);
 
 #endif /* LIBRATBAG_PRIVATE_H */
 

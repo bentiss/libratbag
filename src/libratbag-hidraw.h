@@ -26,6 +26,7 @@
 
 #include <linux/hid.h>
 #include <stdint.h>
+#include <pthread.h>
 
 #include "libratbag.h"
 
@@ -33,6 +34,15 @@
 #define HID_INPUT_REPORT	0
 #define HID_OUTPUT_REPORT	1
 #define HID_FEATURE_REPORT	2
+
+struct ratbag_hidraw {
+	int fd;
+	pthread_t events_thread;
+	int use_thread;
+	pthread_mutex_t lock;
+	pthread_mutex_t grab_lock;
+	int pipe_fds[2];
+};
 
 /**
  * Open the hidraw device associated with the device.
@@ -42,6 +52,13 @@
  * @return 0 on success or a negative errno on error
  */
 int ratbag_open_hidraw(struct ratbag_device *device);
+
+/**
+ * Close the hidraw device associated with the device.
+ *
+ * @param device the ratbag device
+ */
+void ratbag_close_hidraw(struct ratbag_device *device);
 
 /**
  * Send report request to device
@@ -78,9 +95,44 @@ int ratbag_hidraw_output_report(struct ratbag_device *device, uint8_t *buf, size
  * @param device the ratbag device
  * @param[out] buf resulting raw data
  * @param len length of buf
+ * @param propagate notify or not the raw_event driver callback
  *
  * @return count of data transfered, or a negative errno on error
  */
-int ratbag_hidraw_read_input_report(struct ratbag_device *device, uint8_t *buf, size_t len);
+int ratbag_hidraw_read_input_report(struct ratbag_device *device, uint8_t *buf,
+				    size_t len, int propagate);
+
+/**
+ * Propagate an input report from the device to the raw_event driver callback
+ *
+ * @param device the ratbag device
+ * @param buf buffer containing the raw data
+ * @param len length of buf
+ *
+ * @return 0, or a negative errno on error
+ */
+int ratbag_hidraw_propagate_report(struct ratbag_device *device, uint8_t *buf,
+				   size_t len);
+
+/**
+ * Start an event thread reader
+ *
+ * @param device the ratbag device
+ *
+ * @return 0 or a negative errno on error
+ */
+int ratbag_hidraw_start_events(struct ratbag_device *device);
+
+/**
+ * Stop the events thread reader
+ *
+ * @param device the ratbag device
+ *
+ * @return 0 or a negative errno on error
+ */
+void ratbag_hidraw_stop_events(struct ratbag_device *device);
+
+int ratbag_hidraw_lock_events(struct ratbag_device *device);
+int ratbag_hidraw_unlock_events(struct ratbag_device *device);
 
 #endif /* LIBRATBAG_HIDRAW_H */

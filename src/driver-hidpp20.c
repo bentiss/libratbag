@@ -428,6 +428,17 @@ hidpp20drv_20_probe(struct ratbag_device *device, const struct ratbag_id id)
 }
 
 static int
+hidpp20_raw_event(struct ratbag_device *device, uint8_t *buf, int len)
+{
+	if (buf[0] != REPORT_ID_SHORT &&
+	    buf[0] != REPORT_ID_LONG)
+		return 0;
+
+	log_buf_error(device->ratbag, "received: ", buf, len);
+	return 0;
+}
+
+static int
 hidpp20drv_probe(struct ratbag_device *device, const struct ratbag_id id)
 {
 	int rc;
@@ -466,6 +477,8 @@ hidpp20drv_probe(struct ratbag_device *device, const struct ratbag_id id)
 	ratbag_device_init_profiles(device, 1,
 				    device->num_buttons ? device->num_buttons : 8);
 
+	ratbag_hidraw_start_events(device);
+
 	return rc;
 err:
 	free(drv_data);
@@ -477,6 +490,8 @@ static void
 hidpp20drv_remove(struct ratbag_device *device)
 {
 	struct hidpp20drv_data *drv_data = ratbag_get_drv_data(device);
+
+	ratbag_close_hidraw(device);
 
 	free(drv_data->controls);
 	free(drv_data->sensors);
@@ -521,4 +536,5 @@ struct ratbag_driver hidpp20_driver = {
 	.read_button = hidpp20drv_read_button,
 	.write_button = hidpp20drv_write_button,
 	.write_resolution_dpi = hidpp20drv_write_resolution_dpi,
+	.raw_event = hidpp20_raw_event,
 };
