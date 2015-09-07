@@ -53,6 +53,7 @@ struct window {
 	const char *path;
 	struct ratbag_device *dev;
 	struct ratbag_profile *current_profile;
+	int current_profile_index;
 	char svg_path[256];
 };
 
@@ -142,6 +143,7 @@ window_cleanup(struct window *w)
 {
 	w->dev = ratbag_device_unref(w->dev);
 	w->current_profile = ratbag_profile_unref(w->current_profile);
+	w->current_profile_index = -1;
 	if (w->svg_handle)
 		g_object_unref(w->svg_handle);
 	w->svg_handle = NULL;
@@ -168,6 +170,14 @@ update_svg_text_from_device(struct window *w, xmlNode *node)
 		xmlNodeSetContent(node, button_action_to_str(button));
 
 		ratbag_button_unref(button);
+		goto out;
+	}
+
+	if (!strncasecmp(content, "current profile", 15)) {
+		char buf[256] = {0};
+		sprintf(buf, "Current profile: %d", w->current_profile_index + 1);
+		xmlNodeSetContent(node, buf);
+
 		goto out;
 	}
 
@@ -245,6 +255,7 @@ update_svg_from_device(struct window *w, int update)
 	}
 
 	w->current_profile = ratbag_profile_unref(w->current_profile);
+	w->current_profile_index = -1;
 
 	num_profiles = ratbag_device_get_num_profiles(w->dev);
 	for (i = 0; i < num_profiles; i++) {
@@ -253,6 +264,7 @@ update_svg_from_device(struct window *w, int update)
 		profile = ratbag_device_get_profile_by_index(w->dev, i);
 		if (ratbag_profile_is_active(profile)) {
 			w->current_profile = profile;
+			w->current_profile_index = i;
 			break;
 		}
 

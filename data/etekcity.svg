@@ -527,5 +527,16 @@
        y="-182.907"
        rx="10.321068"
        ry="10.321068" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:40px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="-591.40881"
+       y="578.69025"
+       id="text4211"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan4213"
+         x="-591.40881"
+         y="578.69025">Current Profile</tspan></text>
   </g>
 </svg>
