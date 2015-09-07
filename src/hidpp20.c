@@ -114,6 +114,7 @@ hidpp20_request_command_allow_error(struct ratbag_device *device, union hidpp20_
 	 * Now read the answers from the device:
 	 * loop until we get the actual answer or an error code.
 	 */
+	ratbag_hidraw_lock_events(device);
 	do {
 		ret = ratbag_hidraw_read_input_report(device, read_buffer.data, LONG_MESSAGE_LENGTH);
 		log_buf_raw(ratbag, " *** received: ", read_buffer.data, ret);
@@ -148,6 +149,7 @@ hidpp20_request_command_allow_error(struct ratbag_device *device, union hidpp20_
 			break;
 		}
 	} while (ret > 0);
+	ratbag_hidraw_unlock_events(device);
 
 	if (ret < 0) {
 		log_error(ratbag, "    USB error: %s (%d)\n", strerror(-ret), -ret);

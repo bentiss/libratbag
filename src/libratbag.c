@@ -263,7 +263,7 @@ ratbag_device_new(struct ratbag *ratbag, struct udev_device *udev_device,
 	}
 
 	device->ratbag = ratbag_ref(ratbag);
-	device->hidraw_fd = -1;
+	device->hidraw.fd = -1;
 	device->refcount = 1;
 	if (udev_device)
 		device->udev_device = udev_device_ref(udev_device);
@@ -297,8 +297,8 @@ ratbag_device_destroy(struct ratbag_device *device)
 	if (device->udev_hidraw)
 		udev_device_unref(device->udev_hidraw);
 
-	if (device->hidraw_fd >= 0)
-		close(device->hidraw_fd);
+	if (device->hidraw.fd >= 0)
+		close(device->hidraw.fd);
 
 	ratbag_unref(device->ratbag);
 	free(device->name);

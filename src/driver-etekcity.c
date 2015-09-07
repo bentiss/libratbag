@@ -667,6 +667,16 @@ etekcity_write_resolution_dpi(struct ratbag_resolution *resolution,
 	return 0;
 }
 
+static void
+etekcity_raw_event(struct ratbag_device *device, uint8_t *buf, int len)
+{
+	/* ignore mouse events */
+	if (buf[0] == 0x01)
+		return;
+
+	log_buf_error(device->ratbag, "received: ", buf, len);
+}
+
 static int
 etekcity_probe(struct ratbag_device *device, const struct ratbag_id id)
 {
@@ -720,6 +730,8 @@ etekcity_probe(struct ratbag_device *device, const struct ratbag_id id)
 		ratbag_device_get_name(device),
 		profile->index);
 
+	ratbag_hidraw_start_events(device);
+
 	return 0;
 
 err:
@@ -731,6 +743,7 @@ err:
 static void
 etekcity_remove(struct ratbag_device *device)
 {
+	ratbag_hidraw_stop_events(device);
 	ratbag_close_hidraw(device);
 	free(ratbag_get_drv_data(device));
 }
@@ -761,4 +774,5 @@ struct ratbag_driver etekcity_driver = {
 	.read_button = etekcity_read_button,
 	.write_button = etekcity_write_button,
 	.write_resolution_dpi = etekcity_write_resolution_dpi,
+	.raw_event = etekcity_raw_event,
 };

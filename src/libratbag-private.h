@@ -31,6 +31,7 @@
 
 #include "libratbag.h"
 #include "libratbag-util.h"
+#include "libratbag-hidraw.h"
 
 #define BUS_ANY					0xffff
 #define VENDOR_ANY				0xffff
@@ -62,7 +63,7 @@ struct ratbag_device {
 
 	struct udev_device *udev_device;
 	struct udev_device *udev_hidraw;
-	int hidraw_fd;
+	struct ratbag_hidraw hidraw;
 	int refcount;
 	struct input_id ids;
 	struct ratbag_driver *driver;
@@ -195,6 +196,8 @@ struct ratbag_driver {
 	 */
 	int (*write_resolution_dpi)(struct ratbag_resolution *resolution,
 				    int dpi_x, int dpi_y);
+
+	void (*raw_event)(struct ratbag_device *device, uint8_t *buf, int len);
 
 	/* private */
 	struct list link;
