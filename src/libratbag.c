@@ -150,35 +150,6 @@ ratbag_log_set_handler(struct ratbag *ratbag,
 	ratbag->log_handler = log_handler;
 }
 
-static inline struct udev_device *
-udev_device_from_devnode(struct ratbag *ratbag, int fd)
-{
-	struct udev_device *dev;
-	struct stat st;
-	size_t count = 0;
-	struct udev *udev = ratbag->udev;
-
-	if (fstat(fd, &st) < 0)
-		return NULL;
-
-	dev = udev_device_new_from_devnum(ratbag->udev, 'c', st.st_rdev);
-
-	while (dev && !udev_device_get_is_initialized(dev)) {
-		udev_device_unref(dev);
-		msleep(10);
-		dev = udev_device_new_from_devnum(udev, 'c', st.st_rdev);
-
-		count++;
-		if (count > 50) {
-			log_bug_libratbag(ratbag,
-					  "udev device never initialized\n");
-			break;
-		}
-	}
-
-	return dev;
-}
-
 static struct udev_device *
 udev_find_hidraw(struct ratbag_device *device)
 {
@@ -297,8 +268,7 @@ ratbag_device_destroy(struct ratbag_device *device)
 	if (device->udev_hidraw)
 		udev_device_unref(device->udev_hidraw);
 
-	if (device->hidraw.fd >= 0)
-		close(device->hidraw.fd);
+	ratbag_close_hidraw(device);
 
 	ratbag_unref(device->ratbag);
 	free(device->name);
@@ -609,6 +579,7 @@ ratbag_create_context(const struct ratbag_interface *interface,
 	ratbag_register_driver(ratbag, &etekcity_driver);
 	ratbag_register_driver(ratbag, &hidpp20_driver);
 	ratbag_register_driver(ratbag, &hidpp10_driver);
+	ratbag_register_driver(ratbag, &roccat_driver);
 
 	return ratbag;
 }
@@ -1239,6 +1210,11 @@ static void
 ratbag_button_destroy(struct ratbag_button *button)
 {
 	list_remove(&button->link);
+	if (button->action.macro) {
+		if (button->action.macro->name)
+			free(button->action.macro->name);
+		free(button->action.macro);
+	}
 	free(button);
 }
 
@@ -1318,4 +1294,116 @@ LIBRATBAG_EXPORT void*
 ratbag_resolution_get_user_data(const struct ratbag_resolution *ratbag_resolution)
 {
 	return ratbag_resolution->userdata;
+}
+
+LIBRATBAG_EXPORT int
+ratbag_button_set_macro(struct ratbag_button *button, const char *name)
+{
+	if (!button->action.macro)
+		button->action.macro = zalloc(sizeof(struct ratbag_macro));
+	else {
+		if (button->action.macro->name)
+			free(button->action.macro->name);
+		memset(button->action.macro, 0, sizeof(struct ratbag_macro));
+	}
+
+	button->action.type = RATBAG_BUTTON_ACTION_TYPE_MACRO;
+	button->action.macro->name = name ? strdup(name) : NULL;
+
+	return 0;
+}
+
+LIBRATBAG_EXPORT int
+ratbag_button_set_macro_event(struct ratbag_button *button,
+			      unsigned int index,
+			      enum ratbag_macro_event_type type,
+			      unsigned int data)
+{
+	struct ratbag_macro *macro;
+
+	if (button->action.type != RATBAG_BUTTON_ACTION_TYPE_MACRO ||
+	    index >= MAX_MACRO_EVENTS)
+		return -EINVAL;
+
+	macro = button->action.macro;
+
+	switch (type) {
+	case RATBAG_MACRO_EVENT_KEY_PRESSED:
+	case RATBAG_MACRO_EVENT_KEY_RELEASED:
+		macro->events[index].type = type;
+		macro->events[index].event.key = data;
+		break;
+	case RATBAG_MACRO_EVENT_WAIT:
+		macro->events[index].type = type;
+		macro->events[index].event.timeout = data;
+		break;
+	case RATBAG_MACRO_EVENT_NONE:
+		macro->events[index].type = type;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+LIBRATBAG_EXPORT int
+ratbag_button_write_macro(struct ratbag_button *button)
+{
+	return button->profile->device->driver->write_button(button, &button->action);
+
+}
+
+LIBRATBAG_EXPORT enum ratbag_macro_event_type
+ratbag_button_get_macro_event_type(struct ratbag_button *button, unsigned int index)
+{
+	if (button->action.type != RATBAG_BUTTON_ACTION_TYPE_MACRO ||
+	    index >= MAX_MACRO_EVENTS)
+		return RATBAG_MACRO_EVENT_INVALID;
+
+	return button->action.macro->events[index].type;
+}
+
+LIBRATBAG_EXPORT int
+ratbag_button_get_macro_event_key(struct ratbag_button *button, unsigned int index)
+{
+	struct ratbag_macro *macro;
+
+	if (button->action.type != RATBAG_BUTTON_ACTION_TYPE_MACRO ||
+	    index >= MAX_MACRO_EVENTS)
+		return -EINVAL;
+
+	macro = button->action.macro;
+
+	if (macro->events[index].type != RATBAG_MACRO_EVENT_KEY_PRESSED &&
+	    macro->events[index].type != RATBAG_MACRO_EVENT_KEY_RELEASED)
+		return -EINVAL;
+
+	return macro->events[index].event.key;
+}
+
+LIBRATBAG_EXPORT int
+ratbag_button_get_macro_event_timeout(struct ratbag_button *button, unsigned int index)
+{
+	struct ratbag_macro *macro;
+
+	if (button->action.type != RATBAG_BUTTON_ACTION_TYPE_MACRO ||
+	    index >= MAX_MACRO_EVENTS)
+		return -EINVAL;
+
+	macro = button->action.macro;
+
+	if (macro->events[index].type != RATBAG_MACRO_EVENT_WAIT)
+		return -EINVAL;
+
+	return macro->events[index].event.timeout;
+}
+
+LIBRATBAG_EXPORT const char *
+ratbag_button_get_macro_name(struct ratbag_button *button)
+{
+	if (button->action.type != RATBAG_BUTTON_ACTION_TYPE_MACRO)
+		return NULL;
+
+	return  button->action.macro->name;
 }

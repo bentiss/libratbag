@@ -104,6 +104,7 @@ hidpp10drv_has_capability(const struct ratbag_device *device,
 	case RATBAG_DEVICE_CAP_SWITCHABLE_RESOLUTION:
 	case RATBAG_DEVICE_CAP_BUTTON_KEY:
 	case RATBAG_DEVICE_CAP_BUTTON_MACROS:
+	case RATBAG_DEVICE_CAP_DEFAULT_PROFILE:
 		return (device->num_profiles > 1);
 	}
 	return 0;
@@ -207,6 +208,11 @@ hidpp10drv_probe(struct ratbag_device *device, const struct ratbag_id id)
 		goto err;
 	}
 
+	if (!ratbag_hidraw_has_report(device, REPORT_ID_SHORT)) {
+		ratbag_close_hidraw(device);
+		return -ENODEV;
+	}
+
 	drv_data = zalloc(sizeof(*drv_data));
 
 	/* We can treat all devices as wired devices here. If we talk to the
@@ -228,7 +234,13 @@ hidpp10drv_probe(struct ratbag_device *device, const struct ratbag_id id)
 
 	if (hidpp10drv_fill_from_profile(device, dev)) {
 		/* Fall back to something that every mouse has */
+		struct ratbag_profile *profile;
+
 		ratbag_device_init_profiles(device, 1, 3);
+		profile = ratbag_device_get_profile_by_index(device, 0);
+		profile->is_active = true;
+		profile->is_default = true;
+		ratbag_profile_unref(profile);
 	}
 
 	return 0;
@@ -269,6 +281,9 @@ static const struct ratbag_id hidpp10drv_table[] = {
 
 	/* M570 */
 	{ .id = LOGITECH_DEVICE(BUS_USB, 0x1028) },
+
+	/* G5 */
+	{ .id = LOGITECH_DEVICE(BUS_USB, 0xc041) },
 
 	/* G500s */
 	{ .id = LOGITECH_DEVICE(BUS_USB, 0xc24e),

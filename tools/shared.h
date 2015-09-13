@@ -37,6 +37,8 @@
 #include <libratbag-util.h>
 #include <libevdev/libevdev.h>
 
+#define MAX_MACRO_EVENTS 64
+
 LIBRATBAG_ATTRIBUTE_PRINTF(1, 2)
 static inline void
 error(const char *format, ...)
@@ -67,6 +69,9 @@ button_action_key_to_str(struct ratbag_button *button);
 
 char *
 button_action_to_str(struct ratbag_button *button);
+
+char *
+button_action_macro_to_str(struct ratbag_button *button);
 
 enum ratbag_button_action_special
 str_to_special_action(const char *str);

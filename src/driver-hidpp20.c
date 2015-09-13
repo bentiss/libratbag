@@ -141,11 +141,15 @@ hidpp20drv_has_capability(const struct ratbag_device *device,
 	struct hidpp20drv_data *drv_data = ratbag_get_drv_data((struct ratbag_device *)device);
 
 	switch (cap) {
+	case RATBAG_DEVICE_CAP_NONE:
+		abort();
 	case RATBAG_DEVICE_CAP_SWITCHABLE_RESOLUTION:
 		return !!(drv_data->capabilities & HIDPP_CAP_SWITCHABLE_RESOLUTION_2201);
 	case RATBAG_DEVICE_CAP_BUTTON_KEY:
 		return !!(drv_data->capabilities & HIDPP_CAP_BUTTON_KEY_1b04);
-	default:
+	case RATBAG_DEVICE_CAP_SWITCHABLE_PROFILE:
+	case RATBAG_DEVICE_CAP_BUTTON_MACROS:
+	case RATBAG_DEVICE_CAP_DEFAULT_PROFILE:
 		return 0;
 	}
 	return 0;
@@ -209,11 +213,11 @@ hidpp20drv_read_resolution_dpi(struct ratbag_profile *profile)
 			log_error(ratbag, "Error, no compatible sensors found.\n");
 			return -ENODEV;
 		}
-		log_info(ratbag,
-			 "device is at %d dpi (variable between %d and %d).\n",
-			 drv_data->sensors[0].dpi,
-			 drv_data->sensors[0].dpi_min,
-			 drv_data->sensors[0].dpi_max);
+		log_debug(ratbag,
+			  "device is at %d dpi (variable between %d and %d).\n",
+			  drv_data->sensors[0].dpi,
+			  drv_data->sensors[0].dpi_min,
+			  drv_data->sensors[0].dpi_max);
 		drv_data->num_sensors = rc;
 		if (drv_data->num_sensors > MAX_RESOLUTIONS)
 			drv_data->num_sensors = MAX_RESOLUTIONS;
@@ -453,6 +457,11 @@ hidpp20drv_probe(struct ratbag_device *device, const struct ratbag_id id)
 		return -ENODEV;
 	}
 
+	if (!ratbag_hidraw_has_report(device, REPORT_ID_LONG)) {
+		ratbag_close_hidraw(device);
+		return -ENODEV;
+	}
+
 	drv_data = zalloc(sizeof(*drv_data));
 	ratbag_set_drv_data(device, drv_data);
 
@@ -519,6 +528,9 @@ static const struct ratbag_id hidpp20drv_table[] = {
 
 	/* M325 over unifying */
 	{ .id = LOGITECH_DEVICE(BUS_USB, 0x400a) },
+
+	/* G303 over USB */
+	{ .id = LOGITECH_DEVICE(BUS_USB, 0xc080) },
 
 	{ },
 };
