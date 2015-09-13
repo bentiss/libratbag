@@ -37,6 +37,8 @@
 
 struct ratbag_hidraw {
 	int fd;
+	uint8_t *report_ids;
+	unsigned num_report_ids;
 	pthread_t events_thread;
 	int use_thread;
 	pthread_mutex_t lock;
@@ -134,5 +136,16 @@ void ratbag_hidraw_stop_events(struct ratbag_device *device);
 
 int ratbag_hidraw_lock_events(struct ratbag_device *device);
 int ratbag_hidraw_unlock_events(struct ratbag_device *device);
+
+/**
+ * Tells if a given device has the specified report ID.
+ *
+ * @param device the ratbag device which hidraw node is opened
+ * @param report_id the report ID we inquire about
+ *
+ * @return 1 if the device has the given report id, 0 otherwise
+ */
+int
+ratbag_hidraw_has_report(struct ratbag_device *device, uint8_t report_id);
 
 #endif /* LIBRATBAG_HIDRAW_H */

@@ -262,6 +262,8 @@ etekcity_has_capability(const struct ratbag_device *device,
 	case RATBAG_DEVICE_CAP_BUTTON_KEY:
 	case RATBAG_DEVICE_CAP_BUTTON_MACROS:
 		return 1;
+	case RATBAG_DEVICE_CAP_DEFAULT_PROFILE:
+		return 0;
 	}
 	return 0;
 }
@@ -552,7 +554,7 @@ etekcity_write_profile(struct ratbag_profile *profile)
 
 	msleep(100);
 
-	if (rc < 50)
+	if (rc < ETEKCITY_REPORT_SIZE_PROFILE)
 		return -EIO;
 
 	log_raw(device->ratbag, "profile: %d written %s:%d\n",
@@ -785,6 +787,11 @@ etekcity_probe(struct ratbag_device *device, const struct ratbag_id id)
 			  "Can't open corresponding hidraw node: '%s' (%d)\n",
 			  strerror(-rc),
 			  rc);
+		return -ENODEV;
+	}
+
+	if (!ratbag_hidraw_has_report(device, ETEKCITY_REPORT_ID_KEY_MAPPING)) {
+		ratbag_close_hidraw(device);
 		return -ENODEV;
 	}
 

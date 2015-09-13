@@ -36,6 +36,58 @@
 #define HID_MAX_BUFFER_SIZE	4096		/* 4kb */
 #endif
 
+#define HID_REPORT_ID		0b10000100
+
+static int
+ratbag_hidraw_parse_report_descriptor(struct ratbag_device *device)
+{
+	int rc, desc_size = 0;
+	struct ratbag_hidraw *hidraw = &device->hidraw;
+	struct hidraw_report_descriptor report_desc = {0};
+	unsigned int i, j;
+
+	hidraw->num_report_ids = 0;
+
+	rc = ioctl(device->hidraw.fd, HIDIOCGRDESCSIZE, &desc_size);
+	if (rc < 0)
+		return rc;
+
+	report_desc.size = desc_size;
+	rc = ioctl(device->hidraw.fd, HIDIOCGRDESC, &report_desc);
+	if (rc < 0)
+		return rc;
+
+	i = 0;
+	while (i < report_desc.size) {
+		uint8_t value = report_desc.value[i];
+		uint8_t hid = value & 0xfc;
+		uint8_t size = value & 0x3;
+
+		if (size == 3)
+			size = 4;
+
+		if (i + size >= report_desc.size)
+			return -EPROTO;
+
+		if (hid == HID_REPORT_ID) {
+			unsigned report_id = 0;
+
+			for (j = 0; j < size; j++) {
+				report_id |= report_desc.value[i + j + 1] << ((size - j - 1) * 8);
+				if (hidraw->report_ids) {
+					log_debug(device->ratbag, "report ID %02x\n", report_id);
+					hidraw->report_ids[hidraw->num_report_ids] = report_id;
+				}
+				hidraw->num_report_ids++;
+			}
+		}
+
+		i += 1 + size;
+	}
+
+	return 0;
+}
+
 int
 ratbag_open_hidraw(struct ratbag_device *device)
 {
@@ -62,6 +114,23 @@ ratbag_open_hidraw(struct ratbag_device *device)
 
 	device->hidraw.fd = fd;
 
+	/* parse first to count the number of reports */
+	res = ratbag_hidraw_parse_report_descriptor(device);
+	if (res) {
+		log_error(device->ratbag,
+			  "Error while parsing the report descriptor: '%s' (%d)\n",
+			  strerror(-res),
+			  res);
+		device->hidraw.fd = -1;
+		goto err;
+	}
+
+	if (device->hidraw.num_report_ids) {
+		device->hidraw.report_ids = zalloc(device->hidraw.num_report_ids *
+							sizeof(uint8_t));
+		ratbag_hidraw_parse_report_descriptor(device);
+	}
+
 	pthread_mutexattr_init(&mutex_attr);
 	pthread_mutex_init(&device->hidraw.lock, &mutex_attr);
 	pthread_mutex_init(&device->hidraw.grab_lock, &mutex_attr);
@@ -83,15 +152,36 @@ err:
 	return -errno;
 }
 
+int
+ratbag_hidraw_has_report(struct ratbag_device *device, uint8_t report_id)
+{
+	unsigned i;
+
+	for (i = 0; i < device->hidraw.num_report_ids; i++) {
+		if (device->hidraw.report_ids[i] == report_id)
+			return 1;
+	}
+
+	return 0;
+}
+
 void
 ratbag_close_hidraw(struct ratbag_device *device)
 {
+	if (device->hidraw.fd < 0)
+		return;
+
 	ratbag_hidraw_stop_events(device);
 	pthread_mutex_destroy(&device->hidraw.lock);
 	pthread_mutex_destroy(&device->hidraw.grab_lock);
 
 	ratbag_close_fd(device, device->hidraw.fd);
 	device->hidraw.fd = -1;
+
+	if (device->hidraw.report_ids) {
+		free(device->hidraw.report_ids);
+		device->hidraw.report_ids = NULL;
+	}
 }
 
 static int
