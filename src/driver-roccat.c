@@ -872,6 +872,25 @@ roccat_write_resolution_dpi(struct ratbag_resolution *resolution,
 }
 
 static int
+roccat_raw_event(struct ratbag_device *device, uint8_t *buf, int len)
+{
+	/* ignore mouse events */
+	if (buf[0] != 0x03 || len < 4)
+		return 0;
+
+	switch (buf[2]) {
+		case 0xb0:
+			ratbag_internal_resolution_set_active(device, buf[3] - 1);
+			break;
+		case 0x30:
+			ratbag_internal_profile_set_active(device, buf[3] - 1);
+			break;
+	}
+
+	return 0;
+}
+
+static int
 roccat_probe(struct ratbag_device *device, const struct ratbag_id id)
 {
 	int rc;
@@ -921,6 +940,8 @@ roccat_probe(struct ratbag_device *device, const struct ratbag_id id)
 		ratbag_device_get_name(device),
 		profile->index);
 
+	ratbag_hidraw_start_events(device);
+
 	return 0;
 
 err:
@@ -932,6 +953,7 @@ err:
 static void
 roccat_remove(struct ratbag_device *device)
 {
+	ratbag_hidraw_stop_events(device);
 	ratbag_close_hidraw(device);
 	free(ratbag_get_drv_data(device));
 }
@@ -959,4 +981,5 @@ struct ratbag_driver roccat_driver = {
 	.read_button = roccat_read_button,
 	.write_button = roccat_write_button,
 	.write_resolution_dpi = roccat_write_resolution_dpi,
+	.raw_event = roccat_raw_event,
 };
