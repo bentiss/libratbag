@@ -161,8 +161,7 @@ update_svg_text_from_device(struct window *w, xmlNode *node)
 	if (!strncasecmp(content, "button", 6)) {
 		struct ratbag_button *button;
 		index = atoi(content + 6);
-		button = ratbag_profile_get_button_by_index(w->current_profile,
-							    index);
+		button = ratbag_profile_get_button(w->current_profile, index);
 		if (!button) {
 			xmlNodeSetContent(node, "XXXXXXXX");
 			goto out;
@@ -278,7 +277,7 @@ update_svg_from_device(struct window *w, int update)
 	for (i = 0; i < num_profiles; i++) {
 		struct ratbag_profile *profile;
 
-		profile = ratbag_device_get_profile_by_index(w->dev, i);
+		profile = ratbag_device_get_profile(w->dev, i);
 		if (ratbag_profile_is_active(profile)) {
 			w->current_profile = profile;
 			w->current_profile_index = i;
