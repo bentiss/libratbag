@@ -277,6 +277,9 @@ roccat_is_ready(struct ratbag_device *device)
 	if (buf[1] == 0x03)
 		msleep(100);
 
+	if (buf[1] == 0x02)
+		return 2;
+
 	return buf[1] == 0x01;
 }
 
@@ -294,6 +297,9 @@ roccat_wait_ready(struct ratbag_device *device)
 
 		if (rc == 1)
 			return 0;
+
+		if (rc == 2)
+			return 2;
 
 		msleep(10);
 	}
@@ -380,7 +386,7 @@ roccat_set_config_profile(struct ratbag_device *device, uint8_t profile, uint8_t
 		return -EIO;
 
 	ret = roccat_wait_ready(device);
-	if (ret)
+	if (ret < 0)
 		log_error(device->ratbag,
 			  "Error while waiting for the device to be ready: %s (%d)\n",
 			  strerror(-ret), ret);
@@ -660,6 +666,9 @@ roccat_read_button(struct ratbag_button *button)
 
 		roccat_set_config_profile(device,
 					  button->profile->index,
+					  0);
+		roccat_set_config_profile(device,
+					  button->profile->index,
 					  button->index);
 		macro = &drv_data->macros[button->profile->index][button->index];
 		buf = (uint8_t*)macro;
@@ -673,6 +682,13 @@ roccat_read_button(struct ratbag_button *button)
 				  button->index, button->profile->index,
 				  rc < 0 ? strerror(-rc) : "not read enough", rc);
 		} else {
+			if (buf[0] != ROCCAT_REPORT_ID_MACRO) {
+				log_error(device->ratbag,
+					  "Error while reading the macro of button %d of profile %d.\n",
+					  button->index,
+					  button->profile->index);
+				goto out_macro;
+			}
 			if (!roccat_crc_is_valid(device, buf, ROCCAT_REPORT_SIZE_MACRO)) {
 				log_error(device->ratbag,
 					  "wrong checksum while reading the macro of button %d of profile %d.\n",
@@ -814,11 +830,21 @@ roccat_write_button(struct ratbag_button *button,
 
 	*data = rc;
 
+	rc = roccat_write_profile(button->profile);
+	if (rc) {
+		log_error(device->ratbag,
+			  "unable to write the profile to the device: '%s' (%d)\n",
+			  strerror(-rc), rc);
+		return rc;
+	}
+
 	rc = roccat_write_macro(button, action);
-	if (rc)
+	if (rc) {
 		log_error(device->ratbag,
 			  "unable to write the macro to the device: '%s' (%d)\n",
 			  strerror(-rc), rc);
+		return rc;
+	}
 
 	return rc;
 }
