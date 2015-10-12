@@ -255,6 +255,7 @@ int hidpp20_adjustable_dpi_set_sensor_dpi(struct hidpp_device *device,
 
 #define HIDPP20_BUTTON_HID_MOUSE		0x81
 #define HIDPP20_BUTTON_HID_KEYBOARD		0x82
+#define HIDPP20_BUTTON_HID_CONSUMER_CONTROL	0x83
 #define HIDPP20_BUTTON_SPECIAL			0x90
 #define HIDPP20_BUTTON_DISABLED			0xFF
 
