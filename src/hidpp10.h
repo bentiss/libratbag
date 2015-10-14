@@ -59,7 +59,6 @@ void hidpp10_device_destroy(struct hidpp10_device *dev);
 int hidpp10_request_command(struct hidpp10_device *device, union hidpp10_message *msg);
 int hidpp10_open_lock(struct hidpp10_device *device);
 int hidpp10_disconnect(struct hidpp10_device *device, int idx);
-void hidpp10_list_devices(struct ratbag_device *device);
 struct hidpp10_device *hidpp10_device_new_from_wpid(struct ratbag_device *device, uint16_t wpid);
 struct hidpp10_device *hidpp10_device_new_from_idx(struct ratbag_device *device, int idx);
 
