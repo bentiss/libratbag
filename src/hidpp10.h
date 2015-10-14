@@ -33,8 +33,6 @@
 #include <stdbool.h>
 
 #include "hidpp-generic.h"
-#include "libratbag-private.h"
-#include "libratbag.h"
 
 struct hidpp10_device;
 
@@ -59,8 +57,10 @@ void hidpp10_device_destroy(struct hidpp10_device *dev);
 int hidpp10_request_command(struct hidpp10_device *device, union hidpp10_message *msg);
 int hidpp10_open_lock(struct hidpp10_device *device);
 int hidpp10_disconnect(struct hidpp10_device *device, int idx);
-struct hidpp10_device *hidpp10_device_new_from_wpid(struct ratbag_device *device, uint16_t wpid);
-struct hidpp10_device *hidpp10_device_new_from_idx(struct ratbag_device *device, int idx);
+struct hidpp10_device *hidpp10_device_new_from_wpid(const struct hidpp_device *base,
+						    uint16_t wpid);
+struct hidpp10_device *hidpp10_device_new_from_idx(const struct hidpp_device *base,
+						   int idx);
 
 /* -------------------------------------------------------------------------- */
 /* 0x00: Enable HID++ Notifications                                           */
@@ -331,7 +331,6 @@ hidpp10_get_firmare_information(struct hidpp10_device *dev,
 #define HIDPP10_NUM_PROFILES 3
 struct hidpp10_device  {
 	struct hidpp_device base;
-	struct ratbag_device *ratbag_device;
 	unsigned index;
 	char name[15];
 	uint16_t wpid;
