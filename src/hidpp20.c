@@ -962,8 +962,9 @@ hidpp20_onboard_profiles_arbitrary_command(struct ratbag_device *device,
 static int
 hidpp20_onboard_profiles_read_memory(struct ratbag_device *device,
 				     uint8_t reg,
-				     uint16_t page,
-				     uint16_t section,
+				     uint8_t read_rom,
+				     uint8_t page,
+				     uint8_t section,
 				     uint8_t *result)
 {
 	int rc;
@@ -972,11 +973,14 @@ hidpp20_onboard_profiles_read_memory(struct ratbag_device *device,
 		.msg.device_idx = 0xff,
 		.msg.sub_id = reg,
 		.msg.address = CMD_ONBOARD_PROFILES_MEMORY_READ,
-		.msg.parameters[0] = page >> 8,
-		.msg.parameters[1] = page & 0xFF,
-		.msg.parameters[2] = section >> 8,
-		.msg.parameters[3] = section & 0xFF,
+		.msg.parameters[0] = read_rom,
+		.msg.parameters[1] = page,
+		.msg.parameters[2] = 0,
+		.msg.parameters[3] = section,
 	};
+
+	if (read_rom > 1)
+		return -EINVAL;
 
 	rc = hidpp20_request_command(device, &msg);
 	if (rc)
@@ -1120,8 +1124,9 @@ hidpp20_onboard_profiles_allocate(struct ratbag_device *device,
 		return rc;
 
 	rc = hidpp20_onboard_profiles_read_memory(device, feature_index,
-						  0x0000,
-						  0x0000,
+						  0x00,
+						  0x00,
+						  0x00,
 						  data);
 	if (rc < 0)
 		return rc;
@@ -1162,6 +1167,7 @@ int hidpp20_onboard_profiles_read(struct ratbag_device *device,
 	for (i = 0; i < HIDPP20_PROFILE_SIZE / 0x10; i++) {
 		rc = hidpp20_onboard_profiles_read_memory(device,
 							  profiles_list->feature_index,
+							  0,
 							  index + 1,
 							  i * 0x10,
 							  data + i * 0x10);
