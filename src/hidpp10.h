@@ -38,8 +38,6 @@ struct hidpp10_device;
 
 void hidpp10_device_destroy(struct hidpp10_device *dev);
 
-int hidpp10_open_lock(struct hidpp10_device *device);
-int hidpp10_disconnect(struct hidpp10_device *device, int idx);
 struct hidpp10_device *hidpp10_device_new_from_wpid(const struct hidpp_device *base,
 						    uint16_t wpid);
 struct hidpp10_device *hidpp10_device_new_from_idx(const struct hidpp_device *base,
@@ -285,6 +283,15 @@ hidpp10_read_memory(struct hidpp10_device *dev,
 		    uint8_t page,
 		    uint8_t offset,
 		    uint8_t bytes[16]);
+
+/* -------------------------------------------------------------------------- */
+/* 0xB2: Device Connection and Disconnection (Pairing)                        */
+/* -------------------------------------------------------------------------- */
+
+int
+hidpp10_open_lock(struct hidpp10_device *device);
+int
+hidpp10_disconnect(struct hidpp10_device *device, int idx);
 
 /* -------------------------------------------------------------------------- */
 /* 0xB5: Pairing Information                                                  */
