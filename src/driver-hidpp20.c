@@ -122,7 +122,7 @@ hidpp20drv_onboard_profile_8100_read_button(struct ratbag_button *button)
 		break;
 	case HIDPP20_BUTTON_SPECIAL:
 		button->action.type = RATBAG_BUTTON_ACTION_TYPE_SPECIAL;
-		button->action.action.special = hidpp20_onboard_profiles_get_special(device,
+		button->action.action.special = hidpp20_onboard_profiles_get_special(&drv_data->base,
 										     profile->buttons[button->index].code);
 		break;
 	}
@@ -209,7 +209,7 @@ hidpp20drv_current_profile(struct ratbag_device *device)
 	if (!(drv_data->capabilities & HIDPP_CAP_ONBOARD_PROFILES_8100))
 		return 0;
 
-	rc = hidpp20_onboard_profiles_get_current_profile(device,
+	rc = hidpp20_onboard_profiles_get_current_profile(&drv_data->base,
 							  drv_data->profiles);
 	if (rc < 0)
 		return rc;
@@ -391,14 +391,14 @@ hidpp20drv_read_onboard_profile(struct ratbag_device *device, unsigned index)
 		return 0;
 
 	if (!drv_data->profiles) {
-		rc = hidpp20_onboard_profiles_allocate(device, &drv_data->profiles);
+		rc = hidpp20_onboard_profiles_allocate(&drv_data->base, &drv_data->profiles);
 		if (rc < 0)
 			return rc;
 
 		device->num_buttons = drv_data->profiles->num_buttons;
 	}
 
-	rc = hidpp20_onboard_profiles_read(device, index, drv_data->profiles);
+	rc = hidpp20_onboard_profiles_read(&drv_data->base, index, drv_data->profiles);
 	if (rc < 0)
 		return rc;
 
@@ -457,7 +457,7 @@ hidpp20drv_init_feature(struct ratbag_device *device, uint16_t feature)
 	int rc;
 	uint8_t feature_index, feature_type, feature_version;
 
-	rc = hidpp_root_get_feature(device,
+	rc = hidpp_root_get_feature(&drv_data->base,
 				    feature,
 				    &feature_index,
 				    &feature_type,

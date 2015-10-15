@@ -289,13 +289,13 @@ struct hidpp20_profiles {
  *
  * returns the number of profiles in the list or a negative error
  */
-int hidpp20_onboard_profiles_allocate(struct ratbag_device *device,
+int hidpp20_onboard_profiles_allocate(struct hidpp_device *device,
 					struct hidpp20_profiles **profiles_list);
 
 /**
  * return the current profile index or a negative error.
  */
-int hidpp20_onboard_profiles_get_current_profile(struct ratbag_device *device,
+int hidpp20_onboard_profiles_get_current_profile(struct hidpp_device *device,
 					struct hidpp20_profiles *profiles_list);
 
 /**
@@ -304,13 +304,13 @@ int hidpp20_onboard_profiles_get_current_profile(struct ratbag_device *device,
  *
  * return 0 or a negative error.
  */
-int hidpp20_onboard_profiles_read(struct ratbag_device *device,
+int hidpp20_onboard_profiles_read(struct hidpp_device *device,
 				  unsigned int index,
 				  struct hidpp20_profiles *profiles_list);
 
 
 enum ratbag_button_action_special
-hidpp20_onboard_profiles_get_special(struct ratbag_device *device,
+hidpp20_onboard_profiles_get_special(struct hidpp_device *device,
 				     uint8_t code);
 
 /* -------------------------------------------------------------------------- */

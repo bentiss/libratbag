@@ -932,7 +932,7 @@ int hidpp20_adjustable_dpi_set_sensor_dpi(struct hidpp_device *device,
 
 
 static int
-hidpp20_onboard_profiles_arbitrary_command(struct ratbag_device *device,
+hidpp20_onboard_profiles_arbitrary_command(struct hidpp_device *device,
 					   uint8_t reg,
 					   uint8_t address,
 					   uint8_t *parameters,
@@ -960,7 +960,7 @@ hidpp20_onboard_profiles_arbitrary_command(struct ratbag_device *device,
 }
 
 static int
-hidpp20_onboard_profiles_read_memory(struct ratbag_device *device,
+hidpp20_onboard_profiles_read_memory(struct hidpp_device *device,
 				     uint8_t reg,
 				     uint8_t read_rom,
 				     uint8_t page,
@@ -992,7 +992,7 @@ hidpp20_onboard_profiles_read_memory(struct ratbag_device *device,
 }
 
 static int
-hidpp20_onboard_profiles_get_profiles(struct ratbag_device *device)
+hidpp20_onboard_profiles_get_profiles(struct hidpp_device *device)
 {
 	uint8_t feature_index, feature_type, feature_version;
 	unsigned i, j, k;
@@ -1015,7 +1015,7 @@ hidpp20_onboard_profiles_get_profiles(struct ratbag_device *device)
 	hidpp20_onboard_profiles_arbitrary_command(device, feature_index,
 						   data[0],
 						   parameters, result);
-	log_buf_error(device->ratbag, "cmd: ", data, sizeof(data));
+	hidpp_log_buf_error(device, "cmd: ", data, sizeof(data));
 
 	memset(data, 0, sizeof(data));
 	data[0] = 0x10;
@@ -1023,14 +1023,14 @@ hidpp20_onboard_profiles_get_profiles(struct ratbag_device *device)
 	hidpp20_onboard_profiles_arbitrary_command(device, feature_index,
 						   data[0],
 						   parameters, result);
-	log_buf_error(device->ratbag, "cmd: ", data, sizeof(data));
+	hidpp_log_buf_error(device, "cmd: ", data, sizeof(data));
 
 	memset(data, 0, sizeof(data));
 	data[0] = 0x00;
 	hidpp20_onboard_profiles_arbitrary_command(device, feature_index,
 						   data[0],
 						   parameters, result);
-	log_buf_error(device->ratbag, "cmd: ", data, sizeof(data));
+	hidpp_log_buf_error(device, "cmd: ", data, sizeof(data));
 
 	for (k = 0; k < 2; k++) {
 		memset(data, 0, sizeof(data));
@@ -1043,7 +1043,7 @@ hidpp20_onboard_profiles_get_profiles(struct ratbag_device *device)
 				hidpp20_onboard_profiles_arbitrary_command(device, feature_index,
 									   data[0],
 									   parameters, result);
-				log_buf_error(device->ratbag, "cmd: ", data, sizeof(data));
+				hidpp_log_buf_error(device, "cmd: ", data, sizeof(data));
 			}
 		}
 	}
@@ -1052,7 +1052,7 @@ hidpp20_onboard_profiles_get_profiles(struct ratbag_device *device)
 }
 
 int
-hidpp20_onboard_profiles_get_current_profile(struct ratbag_device *device,
+hidpp20_onboard_profiles_get_current_profile(struct hidpp_device *device,
 					     struct hidpp20_profiles *profiles_list)
 {
 	int rc;
@@ -1078,7 +1078,7 @@ hidpp20_onboard_profiles_get_current_profile(struct ratbag_device *device,
 }
 
 static int
-hidpp20_onboard_profiles_initialize(struct ratbag_device *device,
+hidpp20_onboard_profiles_initialize(struct hidpp_device *device,
 				    uint8_t feature_index,
 				    unsigned profile_count,
 				    struct hidpp20_profiles *profiles_list)
@@ -1105,7 +1105,7 @@ hidpp20_onboard_profiles_initialize(struct ratbag_device *device,
 }
 
 int
-hidpp20_onboard_profiles_allocate(struct ratbag_device *device,
+hidpp20_onboard_profiles_allocate(struct hidpp_device *device,
 				  struct hidpp20_profiles **profiles_list)
 {
 	uint8_t feature_index, feature_type, feature_version;
@@ -1152,7 +1152,7 @@ hidpp20_onboard_profiles_allocate(struct ratbag_device *device,
 	return profile_count;
 }
 
-int hidpp20_onboard_profiles_read(struct ratbag_device *device,
+int hidpp20_onboard_profiles_read(struct hidpp_device *device,
 				  unsigned int index,
 				  struct hidpp20_profiles *profiles_list)
 {
@@ -1223,7 +1223,7 @@ static const enum ratbag_button_action_special hidpp20_profiles_specials[] = {
 };
 
 enum ratbag_button_action_special
-hidpp20_onboard_profiles_get_special(struct ratbag_device *device,
+hidpp20_onboard_profiles_get_special(struct hidpp_device *device,
 				     uint8_t code)
 {
 	return hidpp20_profiles_specials[code];
