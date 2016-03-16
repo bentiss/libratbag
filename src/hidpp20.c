@@ -902,6 +902,239 @@ int hidpp20_adjustable_dpi_set_sensor_dpi(struct hidpp20_device *device,
 	return 0;
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* 0x8070 - Color LED effects                                                 */
+/* -------------------------------------------------------------------------- */
+
+#define CMD_COLOR_LED_EFFECTS_GET_INFO			0x00
+#define CMD_COLOR_LED_EFFECTS_GET_ZONE_INFO		0x10
+#define CMD_COLOR_LED_EFFECTS_GET_ZONE_EFFECT_INFO	0x20
+#define CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT		0x30
+
+struct hidpp20_color_led_info {
+	uint8_t zone_count;
+	uint16_t nv_caps;
+	uint16_t ext_caps;
+} __attribute__((packed));
+_Static_assert(sizeof(struct hidpp20_color_led_info) == 5, "Invalid size");
+
+int hidpp20_color_led_effects_get_info(struct hidpp20_device *device,
+				       uint8_t *zone_count,
+				       uint32_t *capability_flags)
+{
+	int rc;
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_SHORT,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_COLOR_LED_EFFECTS_GET_INFO,
+	};
+	struct hidpp20_color_led_info *info;
+	uint8_t feature_index;
+	uint16_t caps,
+		 nvcaps __attribute__((unused));
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_COLOR_LED_EFFECTS);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	info = (struct hidpp20_color_led_info*)msg.msg.parameters;
+
+	*zone_count = info->zone_count;
+	caps = hidpp_be_u16_to_cpu(info->ext_caps);
+	/* we don't care about NV capabilities for libratbag, they just
+	 * indicate sale demo effects */
+	nvcaps = hidpp_be_u16_to_cpu(info->nv_caps);
+
+
+	/* 0x02 is inverted, if set in the HW, we *don't* support the
+	 * capability. Invert the bit here for an easier API */
+	if (caps & HIDPP20_COLOR_LED_HAS_GET_EFFECT_SETTINGS)
+		caps &= ~HIDPP20_COLOR_LED_HAS_GET_EFFECT_SETTINGS;
+	else
+		caps |= HIDPP20_COLOR_LED_HAS_GET_EFFECT_SETTINGS;
+
+	*capability_flags = caps;
+
+	return 0;
+}
+
+struct hidpp20_color_led_zone_info {
+	uint8_t index;
+	uint16_t location;
+	uint8_t num_effects;
+	uint8_t persistency_caps;
+} __attribute__((packed));
+_Static_assert(sizeof(struct hidpp20_color_led_zone_info) == 5, "Invalid size");
+
+int hidpp20_color_led_effects_get_zone_info(struct hidpp20_device *device,
+					    uint8_t zone_index,
+					    enum hidpp20_color_led_location *location,
+					    uint8_t *num_effects,
+					    enum hidpp20_color_led_persistency *persistency_caps)
+{
+	int rc;
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_COLOR_LED_EFFECTS_GET_ZONE_INFO,
+		.msg.parameters[0] = zone_index,
+	};
+	struct hidpp20_color_led_zone_info *info;
+	uint8_t feature_index;
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_COLOR_LED_EFFECTS);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	info = (struct hidpp20_color_led_zone_info *)msg.msg.parameters;
+	*location = hidpp_be_u16_to_cpu(info->location);
+	*num_effects = info->num_effects;
+	*persistency_caps = info->persistency_caps;
+
+	return 0;
+}
+
+struct hidpp20_color_led_zone_effect {
+	uint8_t zone_index;
+	uint8_t effect_index;
+	uint16_t type;
+	uint16_t effect_capabilities;
+	uint16_t period_ms;
+} __attribute__((packed));
+_Static_assert(sizeof(struct hidpp20_color_led_zone_effect) == 8, "Invalid size");
+
+int hidpp20_color_led_effects_get_zone_effect(struct hidpp20_device *device,
+					      uint8_t zone_index,
+					      uint8_t zone_effect_index,
+					      enum hidpp20_color_led_effect_type *type,
+					      uint16_t *period_ms)
+{
+	int rc;
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_COLOR_LED_EFFECTS_GET_ZONE_EFFECT_INFO,
+		.msg.parameters[0] = zone_index,
+		.msg.parameters[1] = zone_effect_index,
+	};
+	struct hidpp20_color_led_zone_effect *info;
+	uint8_t feature_index;
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_COLOR_LED_EFFECTS);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	info = (struct hidpp20_color_led_zone_effect *)msg.msg.parameters;
+	*type = hidpp_be_u16_to_cpu(info->type);
+	/* FIXME: implement the massive list of per-effect-type capabilities */
+	/* effect_caps = hidpp_be_u16_to_cpu(info->effect_capabilities); */
+	*period_ms = hidpp_be_u16_to_cpu(info->period_ms);
+
+	return 0;
+}
+
+int hidpp20_color_led_effects_set_zone_effect_disabled(struct hidpp20_device *device,
+						       uint8_t zone_index)
+{
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT,
+		.msg.parameters[0] = zone_index,
+		.msg.parameters[1] = HIDPP20_COLOR_LED_EFFECT_TYPE_DISABLED,
+		.msg.parameters[12] = 1, /* RAM + EEPROM */
+	};
+	uint8_t feature_index;
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_COLOR_LED_EFFECTS);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+
+	return hidpp20_request_command(device, &msg);
+}
+
+int hidpp20_color_led_effects_set_zone_effect_fixed(struct hidpp20_device *device,
+						    uint8_t zone_index,
+						    uint8_t r, uint8_t g, uint8_t b)
+{
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT,
+		.msg.parameters[0] = zone_index,
+		.msg.parameters[1] = HIDPP20_COLOR_LED_EFFECT_TYPE_FIXED,
+		.msg.parameters[2] = r,
+		.msg.parameters[3] = g,
+		.msg.parameters[4] = b,
+		.msg.parameters[12] = 1, /* RAM + EEPROM */
+	};
+	uint8_t feature_index;
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_COLOR_LED_EFFECTS);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+
+	return hidpp20_request_command(device, &msg);
+}
+
+int hidpp20_color_led_effects_set_zone_effect_pulsing(struct hidpp20_device *device,
+						      uint8_t zone_index,
+						      uint8_t r, uint8_t g, uint8_t b,
+						      uint8_t ms)
+{
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT,
+		.msg.parameters[0] = zone_index,
+		.msg.parameters[1] = HIDPP20_COLOR_LED_EFFECT_TYPE_PULSING,
+		.msg.parameters[2] = r,
+		.msg.parameters[3] = g,
+		.msg.parameters[4] = b,
+		.msg.parameters[5] = ms,
+		.msg.parameters[12] = 1, /* RAM + EEPROM */
+	};
+	uint8_t feature_index;
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_COLOR_LED_EFFECTS);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+
+	return hidpp20_request_command(device, &msg);
+}
+
+
 /* -------------------------------------------------------------------------- */
 /* 0x8100 - Onboard Profiles                                                  */
 /* -------------------------------------------------------------------------- */

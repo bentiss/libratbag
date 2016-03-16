@@ -258,6 +258,80 @@ int hidpp20_adjustable_dpi_set_sensor_dpi(struct hidpp20_device *device,
 
 #define HIDPP_PAGE_COLOR_LED_EFFECTS			0x8070
 
+enum hidpp20_color_led_capability {
+	HIDPP20_COLOR_LED_HAS_ZONE_EFFECT = 0x01,
+	HIDPP20_COLOR_LED_HAS_GET_EFFECT_SETTINGS = 0x02,
+	HIDPP20_COLOR_LED_HAS_LED_BIN_INFO = 0x04,
+	HIDPP20_COLOR_LED_MONOCHROME = 0x08,
+};
+
+/**
+ * Returns the number of LED zones on the device and the device's LED
+ * capabilities
+ */
+int hidpp20_color_led_effects_get_info(struct hidpp20_device *device,
+				       uint8_t *zone_count,
+				       enum hidpp20_color_led_capability *capabilities);
+
+enum hidpp20_color_led_location {
+	HIDPP20_COLOR_LED_LOCATION_UNDEFINED = 0,
+	HIDPP20_COLOR_LED_LOCATION_PRIMARY,
+	HIDPP20_COLOR_LED_LOCATION_LOGO,
+	HIDPP20_COLOR_LED_LOCATION_LEFT,
+	HIDPP20_COLOR_LED_LOCATION_RIGHT,
+	HIDPP20_COLOR_LED_LOCATION_COMBINED,
+	HIDPP20_COLOR_LED_LOCATION_PRIMARY_1,
+	HIDPP20_COLOR_LED_LOCATION_PRIMARY_2,
+	HIDPP20_COLOR_LED_LOCATION_PRIMARY_3,
+	HIDPP20_COLOR_LED_LOCATION_PRIMARY_4,
+	HIDPP20_COLOR_LED_LOCATION_PRIMARY_5,
+	HIDPP20_COLOR_LED_LOCATION_PRIMARY_6,
+};
+
+enum hidpp20_color_led_persistency {
+	HIDPP20_COLOR_LED_PERSISTENCY_UNSUPPORTED,
+	HIDPP20_COLOR_LED_PERSISTENCY_ON,
+	HIDPP20_COLOR_LED_PERSISTENCY_OFF,
+	HIDPP20_COLOR_LED_PERSISTENCY_ON_OFF,
+};
+
+int hidpp20_color_led_effects_get_zone_info(struct hidpp20_device *device,
+					    uint8_t zone_index,
+					    enum hidpp20_color_led_location *location,
+					    uint8_t *num_effects,
+					    enum hidpp20_color_led_persistency *persistency_caps);
+
+enum hidpp20_color_led_effect_type {
+	HIDPP20_COLOR_LED_EFFECT_TYPE_DISABLED = 0,
+	HIDPP20_COLOR_LED_EFFECT_TYPE_FIXED,
+	HIDPP20_COLOR_LED_EFFECT_TYPE_PULSING,
+	HIDPP20_COLOR_LED_EFFECT_TYPE_CYCLING,
+	HIDPP20_COLOR_LED_EFFECT_TYPE_WAVE,
+	HIDPP20_COLOR_LED_EFFECT_TYPE_STARLIGHT,
+	HIDPP20_COLOR_LED_EFFECT_TYPE_ON_PRESS,
+	HIDPP20_COLOR_LED_EFFECT_TYPE_AUDIO_VISUALIZER,
+	HIDPP20_COLOR_LED_EFFECT_TYPE_BOOT_UP,
+	HIDPP20_COLOR_LED_EFFECT_TYPE_DEMO_MODE,
+	HIDPP20_COLOR_LED_EFFECT_TYPE_PULSING_WAVE,
+};
+
+int hidpp20_color_led_effects_get_zone_effect(struct hidpp20_device *device,
+					      uint8_t zone_index,
+					      uint8_t zone_effect_index,
+					      enum hidpp20_color_led_effect_type *type,
+					      uint16_t *period_ms);
+
+int hidpp20_color_led_effects_set_zone_effect_disabled(struct hidpp20_device *device,
+						       uint8_t zone_index);
+
+int hidpp20_color_led_effects_set_zone_effect_fixed(struct hidpp20_device *device,
+						    uint8_t zone_index,
+						    uint8_t r, uint8_t g, uint8_t b);
+
+int hidpp20_color_led_effects_set_zone_effect_pulsing(struct hidpp20_device *device,
+						      uint8_t zone_index,
+						      uint8_t r, uint8_t g, uint8_t b,
+						      uint8_t ms);
 /* -------------------------------------------------------------------------- */
 /* 0x8100 - Onboard Profiles                                                  */
 /* -------------------------------------------------------------------------- */
