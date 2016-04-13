@@ -132,7 +132,7 @@ int hidpp20_batterylevel_get_battery_level(struct hidpp20_device *device,
 
 #define HIDPP_PAGE_KBD_REPROGRAMMABLE_KEYS		0x1b00
 
-enum hidpp2_controL_id_flags {
+enum hidpp2_control_id_flags {
 	HIDPP20_CONTROL_ID_FLAG_NONE = 0,
 	HIDPP20_CONTROL_ID_FLAG_MOUSE_BUTTON = (1 << 0), /**< Is a mouse button */
 	HIDPP20_CONTROL_ID_FLAG_FN_KEY = (1 << 1), /**< Is a fn button */
