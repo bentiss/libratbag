@@ -33,6 +33,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "hidpp20.h"
@@ -1053,6 +1054,8 @@ int hidpp20_color_led_effects_get_zone_effect(struct hidpp20_device *device,
 	/* FIXME: implement the massive list of per-effect-type capabilities */
 	/* effect_caps = hidpp_be_u16_to_cpu(info->effect_capabilities); */
 	*period_ms = hidpp_be_u16_to_cpu(info->period_ms);
+
+	printf("-------- effect caps: %#x\n", info->effect_capabilities);
 
 	return 0;
 }
@@ -2324,6 +2327,76 @@ hidpp20_device_new(const struct hidpp_device *base, unsigned int idx)
 	rc = hidpp20_feature_set_get(dev);
 	if (rc < 0)
 		goto err;
+
+	{
+		int i;
+		uint8_t nzones;
+		uint32_t capability_flags;
+
+		printf(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: %s:%d:%s() - \n", __FILE__, __LINE__, __func__);
+
+		hidpp20_color_led_effects_get_info(dev, &nzones, &capability_flags);
+
+		printf("Number of LED zones: %d (caps %#x)\n", nzones,
+		       capability_flags);
+
+		for (i = 0; i < nzones; i++) {
+			enum hidpp20_color_led_location location;
+			uint8_t num_effects;
+			enum hidpp20_color_led_persistency persistency_caps;
+			struct hidpp20_color_led_effect_settings settings;
+			uint8_t r, g, b;
+			int j;
+
+			rc = hidpp20_color_led_effects_get_zone_info(dev, i,
+								     &location,
+								     &num_effects,
+								     &persistency_caps);
+
+			printf("Zone %d: location %d effects %d persist %#x\n",
+			       i, location, num_effects, persistency_caps);
+
+			for (j = 0; j < num_effects; j++) {
+				enum hidpp20_color_led_effect_type type;
+				uint16_t period_ms;
+
+				hidpp20_color_led_effects_get_zone_effect(dev,
+									  i,
+									  j,
+									  &type,
+									  &period_ms);
+				printf("   Effect %d: type %d period %dms\n",
+				       j, type, period_ms);
+
+			}
+
+			rc = hidpp20_color_led_get_effect_settings(dev,
+								   i,
+								   HIDPP20_COLOR_LED_EFFECT_LOCATION_EEPROM,
+								   &settings);
+			printf("Zone %d settings: rgb: %d/%d/%d brightness %d%% period %dms\n",
+			       i,
+			       settings.r, settings.g, settings.b,
+			       settings.brightness,
+			       settings.period);
+
+			rc = hidpp20_color_led_get_current_color(dev,
+								 i,
+								 &r, &g, &b);
+			printf("Zone %d: rgb: %d/%d/%d\n", i, r, g, b);
+
+
+		}
+
+		printf("Setting to fixed\n");
+		hidpp20_color_led_effects_set_zone_effect_fixed(dev, 0, 255, 255, 0);
+		printf("Setting to breathing\n");
+		hidpp20_color_led_effects_set_zone_effect_breathing(dev, 0, 255, 0, 255, 400);
+
+		printf("Setting to cycling\n");
+		hidpp20_color_led_effects_set_zone_effect_cycling(dev, 0, 1000);
+		printf(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: %s:%d:%s() - \n", __FILE__, __LINE__, __func__);
+	}
 
 	return dev;
 err:
