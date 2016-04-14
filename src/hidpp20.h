@@ -332,6 +332,28 @@ int hidpp20_color_led_effects_set_zone_effect_pulsing(struct hidpp20_device *dev
 						      uint8_t zone_index,
 						      uint8_t r, uint8_t g, uint8_t b,
 						      uint8_t ms);
+
+struct hidpp20_color_led_effect_settings {
+	uint8_t r, g, b;
+	uint16_t period;
+	uint8_t brightness;
+	uint8_t param;
+};
+
+/* FIXME: should be more generic */
+enum hidpp20_color_led_effect_location {
+	HIDPP20_COLOR_LED_EFFECT_LOCATION_RAM = 0,
+	HIDPP20_COLOR_LED_EFFECT_LOCATION_EEPROM = 1,
+};
+
+int hidpp20_color_led_get_effect_settings(struct hidpp20_device *device,
+					  uint8_t zone_index,
+					  enum hidpp20_color_led_effect_location location,
+					  struct hidpp20_color_led_effect_settings *settings);
+
+int hidpp20_color_led_get_current_color(struct hidpp20_device *device,
+					uint8_t zone_index,
+					uint8_t *r, uint8_t *g, uint8_t *b);
 /* -------------------------------------------------------------------------- */
 /* 0x8100 - Onboard Profiles                                                  */
 /* -------------------------------------------------------------------------- */

@@ -911,6 +911,8 @@ int hidpp20_adjustable_dpi_set_sensor_dpi(struct hidpp20_device *device,
 #define CMD_COLOR_LED_EFFECTS_GET_ZONE_INFO		0x10
 #define CMD_COLOR_LED_EFFECTS_GET_ZONE_EFFECT_INFO	0x20
 #define CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT		0x30
+#define CMD_COLOR_LED_EFFECTS_SET_EFFECT_SETTINGS	0x90
+#define CMD_COLOR_LED_EFFECTS_GET_CURRENT_COLORS	0xc0
 
 struct hidpp20_color_led_info {
 	uint8_t zone_count;
@@ -1134,6 +1136,84 @@ int hidpp20_color_led_effects_set_zone_effect_pulsing(struct hidpp20_device *dev
 	return hidpp20_request_command(device, &msg);
 }
 
+struct _hidpp20_color_led_effect_settings {
+	uint8_t zone_index;
+	uint8_t r,
+		g,
+		b;
+	uint16_t period;
+	uint8_t brightness;
+	uint8_t param;
+} __attribute__((packed));
+_Static_assert(sizeof(struct _hidpp20_color_led_effect_settings) == 8, "Invalid size");
+
+int hidpp20_color_led_get_effect_settings(struct hidpp20_device *device,
+					  uint8_t zone_index,
+					  enum hidpp20_color_led_effect_location location,
+					  struct hidpp20_color_led_effect_settings *settings)
+{
+	int rc;
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_COLOR_LED_EFFECTS_SET_EFFECT_SETTINGS,
+		.msg.parameters[0] = zone_index,
+		.msg.parameters[1] = location,
+	};
+	struct _hidpp20_color_led_effect_settings *info;
+	uint8_t feature_index;
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_COLOR_LED_EFFECTS);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	info = (struct _hidpp20_color_led_effect_settings *)msg.msg.parameters;
+
+	settings->r = info->r;
+	settings->g = info->g;
+	settings->b = info->b;
+	settings->period = hidpp_be_u16_to_cpu(info->period);
+	settings->brightness = info->brightness;
+	settings->param = info->param;
+
+	return 0;
+}
+
+int hidpp20_color_led_get_current_color(struct hidpp20_device *device,
+					uint8_t zone_index,
+					uint8_t *r, uint8_t *g, uint8_t *b)
+{
+	int rc;
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_COLOR_LED_EFFECTS_GET_CURRENT_COLORS,
+		.msg.parameters[0] = zone_index,
+	};
+	uint8_t feature_index;
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_COLOR_LED_EFFECTS);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	*r = msg.msg.parameters[1];
+	*g = msg.msg.parameters[2];
+	*b = msg.msg.parameters[3];
+
+	return 0;
+}
 
 /* -------------------------------------------------------------------------- */
 /* 0x8100 - Onboard Profiles                                                  */
