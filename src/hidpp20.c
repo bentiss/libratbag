@@ -1137,6 +1137,79 @@ int hidpp20_color_led_effects_set_zone_effect_pulsing(struct hidpp20_device *dev
 	return hidpp20_request_command(device, &msg);
 }
 
+int hidpp20_color_led_effects_set_zone_effect_cycling(struct hidpp20_device *device,
+						      uint8_t zone_index,
+						      uint16_t period)
+{
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT,
+		.msg.parameters[0] = zone_index,
+		.msg.parameters[1] = HIDPP20_COLOR_LED_EFFECT_TYPE_CYCLING,
+		/* [7] and [8] are BE period */
+		.msg.parameters[9] = 0, /* intensity [0-100]: default */
+		.msg.parameters[12] = 1, /* RAM + EEPROM */
+	};
+	uint8_t feature_index;
+
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_COLOR_LED_EFFECTS);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+	/* period must be a multiple of the
+	 * hidpp20_color_led_effects_get_zone_effect period */
+	hidpp_set_unaligned_be_u16(&msg.msg.parameters[7], period);
+
+	return hidpp20_request_command(device, &msg);
+}
+
+enum hidpp20_color_led_effects_zone_effect_breathing_waveform {
+	HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_DEFAULT = 0,
+	HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_SINE,
+	HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_SQUARE,
+	HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_TRIANGLE,
+	HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_SAWTOOTH,
+	HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_SHARKFIN,
+	HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_EXPONENTIAL,
+};
+
+int hidpp20_color_led_effects_set_zone_effect_breathing(struct hidpp20_device *device,
+							uint8_t zone_index,
+							uint8_t r, uint8_t g, uint8_t b,
+							uint16_t ms)
+{
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT,
+		.msg.parameters[0] = zone_index,
+		.msg.parameters[1] = HIDPP20_COLOR_LED_EFFECT_TYPE_PULSING_WAVE,
+		.msg.parameters[2] = r,
+		.msg.parameters[3] = g,
+		.msg.parameters[4] = b,
+		.msg.parameters[5] = 0, /* ms msb */
+		.msg.parameters[6] = 0, /* ms lsb */
+		.msg.parameters[7] = HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_DEFAULT,
+		.msg.parameters[8] = 0, /* intensity [0-100]: 0:default */
+		.msg.parameters[12] = 1, /* RAM + EEPROM */
+	};
+	uint8_t feature_index;
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_COLOR_LED_EFFECTS);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+	hidpp_set_unaligned_be_u16(&msg.msg.parameters[5], ms);
+
+	return hidpp20_request_command(device, &msg);
+}
+
 struct _hidpp20_color_led_effect_settings {
 	uint8_t zone_index;
 	uint8_t r,
@@ -1181,7 +1254,6 @@ int hidpp20_color_led_get_effect_settings(struct hidpp20_device *device,
 	settings->b = info->b;
 	settings->period = hidpp_be_u16_to_cpu(info->period);
 	settings->brightness = info->brightness;
-	settings->param = info->param;
 
 	return 0;
 }

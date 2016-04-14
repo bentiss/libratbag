@@ -337,7 +337,7 @@ struct hidpp20_color_led_effect_settings {
 	uint8_t r, g, b;
 	uint16_t period;
 	uint8_t brightness;
-	uint8_t param;
+	/* effect parameters are missing */
 };
 
 /* FIXME: should be more generic */
