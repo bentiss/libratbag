@@ -1093,6 +1093,7 @@ int hidpp20_color_led_effects_set_zone_effect_fixed(struct hidpp20_device *devic
 		.msg.parameters[2] = r,
 		.msg.parameters[3] = g,
 		.msg.parameters[4] = b,
+		.msg.parameters[5] = 0, /* effect: 0: default, 1:ramp up/down, 2: no effect */
 		.msg.parameters[12] = 1, /* RAM + EEPROM */
 	};
 	uint8_t feature_index;
