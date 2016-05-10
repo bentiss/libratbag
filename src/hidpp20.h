@@ -333,6 +333,20 @@ int hidpp20_color_led_effects_set_zone_effect_pulsing(struct hidpp20_device *dev
 						      uint8_t r, uint8_t g, uint8_t b,
 						      uint8_t ms);
 
+int hidpp20_color_led_effects_set_zone_effect_cycling(struct hidpp20_device *device,
+						      uint8_t zone_index,
+						      uint16_t period);
+
+int hidpp20_color_led_effects_set_zone_effect_color_wave(struct hidpp20_device *device,
+							 uint8_t zone_index,
+							 uint8_t r, uint8_t g, uint8_t b,
+							 uint16_t ms);
+
+int hidpp20_color_led_effects_set_zone_effect_breathing(struct hidpp20_device *device,
+							uint8_t zone_index,
+							uint8_t r, uint8_t g, uint8_t b,
+							uint16_t ms);
+
 struct hidpp20_color_led_effect_settings {
 	uint8_t r, g, b;
 	uint16_t period;

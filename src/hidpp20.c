@@ -977,6 +977,74 @@ struct hidpp20_color_led_zone_info {
 } __attribute__((packed));
 _Static_assert(sizeof(struct hidpp20_color_led_zone_info) == 5, "Invalid size");
 
+union hidpp20_color_led_zone_effect_param {
+	struct {
+		uint8_t effectID;
+	} __attribute__((packed)) any;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_DISABLED */
+	} __attribute__((packed)) disabled;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_FIXED */
+		uint8_t red;
+		uint8_t green;
+		uint8_t blue;
+		uint8_t effect;
+	} __attribute__((packed)) fixed;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_PULSING */
+		uint8_t red;
+		uint8_t green;
+		uint8_t blue;
+		uint8_t speed;
+	} __attribute__((packed)) pulsing;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_CYCLING */
+		uint8_t unused[5];
+		uint16_t period;
+		uint8_t intensity;
+	} __attribute__((packed)) cycling;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_WAVE */
+		uint8_t red_start;
+		uint8_t green_start;
+		uint8_t blue_start;
+		uint8_t red_stop;
+		uint8_t green_stop;
+		uint8_t blue_stop;
+		uint8_t speed_LSB;
+		uint8_t direction;
+		uint8_t intensity;
+		uint8_t speed_MSB;
+	} __attribute__((packed)) color_wave;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_STARLIGHT */
+	} __attribute__((packed)) starlight;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_ON_PRESS */
+	} __attribute__((packed)) on_press;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_AUDIO_VISUALIZER */
+	} __attribute__((packed)) audio_visualizer;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_BOOT_UP */
+	} __attribute__((packed)) boot_up;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_DEMO_MODE */
+	} __attribute__((packed)) demo_mode;
+	struct {
+		uint8_t effectID; /* HIDPP20_COLOR_LED_EFFECT_TYPE_PULSING_WAVE */
+		uint8_t red;
+		uint8_t green;
+		uint8_t blue;
+		uint16_t period;
+		uint8_t waveform;
+		uint8_t intensity;
+	} __attribute__((packed)) pulsing_wave;
+} __attribute__((packed));
+_Static_assert(sizeof(union hidpp20_color_led_zone_effect_param) == 11, "Invalid size");
+
+
 int hidpp20_color_led_effects_get_zone_info(struct hidpp20_device *device,
 					    uint8_t zone_index,
 					    enum hidpp20_color_led_location *location,
@@ -1060,15 +1128,15 @@ int hidpp20_color_led_effects_get_zone_effect(struct hidpp20_device *device,
 	return 0;
 }
 
-int hidpp20_color_led_effects_set_zone_effect_disabled(struct hidpp20_device *device,
-						       uint8_t zone_index)
+static int hidpp20_color_led_effects_set_zone_effect(struct hidpp20_device *device,
+						     uint8_t zone_index,
+						     union hidpp20_color_led_zone_effect_param *params)
 {
 	union hidpp20_message msg = {
 		.msg.report_id = REPORT_ID_LONG,
 		.msg.device_idx = device->index,
 		.msg.address = CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT,
 		.msg.parameters[0] = zone_index,
-		.msg.parameters[1] = HIDPP20_COLOR_LED_EFFECT_TYPE_DISABLED,
 		.msg.parameters[12] = 1, /* RAM + EEPROM */
 	};
 	uint8_t feature_index;
@@ -1080,35 +1148,62 @@ int hidpp20_color_led_effects_set_zone_effect_disabled(struct hidpp20_device *de
 
 	msg.msg.sub_id = feature_index;
 
+	memcpy(&msg.msg.parameters[1], params, sizeof(*params));
+
 	return hidpp20_request_command(device, &msg);
+}
+
+static void
+hidpp20_color_led_effects_set_params_disabled(union hidpp20_color_led_zone_effect_param *params)
+{
+	params->disabled.effectID = HIDPP20_COLOR_LED_EFFECT_TYPE_DISABLED;
+}
+
+int hidpp20_color_led_effects_set_zone_effect_disabled(struct hidpp20_device *device,
+						       uint8_t zone_index)
+{
+	union hidpp20_color_led_zone_effect_param params = {0};
+
+	hidpp20_color_led_effects_set_params_disabled(&params);
+
+	return hidpp20_color_led_effects_set_zone_effect(device,
+							 zone_index,
+							 &params);
+}
+
+static void
+hidpp20_color_led_effects_set_params_fixed(union hidpp20_color_led_zone_effect_param *params,
+					   uint8_t r, uint8_t g, uint8_t b)
+{
+	params->fixed.effectID = HIDPP20_COLOR_LED_EFFECT_TYPE_FIXED;
+	params->fixed.red = r;
+	params->fixed.green = g;
+	params->fixed.blue = b;
 }
 
 int hidpp20_color_led_effects_set_zone_effect_fixed(struct hidpp20_device *device,
 						    uint8_t zone_index,
 						    uint8_t r, uint8_t g, uint8_t b)
 {
-	union hidpp20_message msg = {
-		.msg.report_id = REPORT_ID_LONG,
-		.msg.device_idx = device->index,
-		.msg.address = CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT,
-		.msg.parameters[0] = zone_index,
-		.msg.parameters[1] = HIDPP20_COLOR_LED_EFFECT_TYPE_FIXED,
-		.msg.parameters[2] = r,
-		.msg.parameters[3] = g,
-		.msg.parameters[4] = b,
-		.msg.parameters[5] = 0, /* effect: 0: default, 1:ramp up/down, 2: no effect */
-		.msg.parameters[12] = 1, /* RAM + EEPROM */
-	};
-	uint8_t feature_index;
+	union hidpp20_color_led_zone_effect_param params = {0};
 
-	feature_index = hidpp_root_get_feature_idx(device,
-						   HIDPP_PAGE_COLOR_LED_EFFECTS);
-	if (feature_index == 0)
-		return -ENOTSUP;
+	hidpp20_color_led_effects_set_params_fixed(&params, r, g, b);
 
-	msg.msg.sub_id = feature_index;
+	return hidpp20_color_led_effects_set_zone_effect(device,
+							 zone_index,
+							 &params);
+}
 
-	return hidpp20_request_command(device, &msg);
+static void
+hidpp20_color_led_effects_set_params_pulsing(union hidpp20_color_led_zone_effect_param *params,
+					     uint8_t r, uint8_t g, uint8_t b,
+					     uint8_t ms)
+{
+	params->pulsing.effectID = HIDPP20_COLOR_LED_EFFECT_TYPE_PULSING;
+	params->pulsing.red = r;
+	params->pulsing.green = g;
+	params->pulsing.blue = b;
+	params->pulsing.speed = ms;
 }
 
 int hidpp20_color_led_effects_set_zone_effect_pulsing(struct hidpp20_device *device,
@@ -1116,58 +1211,66 @@ int hidpp20_color_led_effects_set_zone_effect_pulsing(struct hidpp20_device *dev
 						      uint8_t r, uint8_t g, uint8_t b,
 						      uint8_t ms)
 {
-	union hidpp20_message msg = {
-		.msg.report_id = REPORT_ID_LONG,
-		.msg.device_idx = device->index,
-		.msg.address = CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT,
-		.msg.parameters[0] = zone_index,
-		.msg.parameters[1] = HIDPP20_COLOR_LED_EFFECT_TYPE_PULSING,
-		.msg.parameters[2] = r,
-		.msg.parameters[3] = g,
-		.msg.parameters[4] = b,
-		.msg.parameters[5] = ms,
-		.msg.parameters[12] = 1, /* RAM + EEPROM */
-	};
-	uint8_t feature_index;
+	union hidpp20_color_led_zone_effect_param params = {0};
 
-	feature_index = hidpp_root_get_feature_idx(device,
-						   HIDPP_PAGE_COLOR_LED_EFFECTS);
-	if (feature_index == 0)
-		return -ENOTSUP;
+	hidpp20_color_led_effects_set_params_pulsing(&params, r, g, b, ms);
 
-	msg.msg.sub_id = feature_index;
+	return hidpp20_color_led_effects_set_zone_effect(device,
+							 zone_index,
+							 &params);
+}
 
-	return hidpp20_request_command(device, &msg);
+static void
+hidpp20_color_led_effects_set_params_cycling(union hidpp20_color_led_zone_effect_param *params,
+					     uint16_t period)
+{
+	params->cycling.effectID = HIDPP20_COLOR_LED_EFFECT_TYPE_CYCLING;
+	params->cycling.period = hidpp_cpu_to_be_u16(period);
 }
 
 int hidpp20_color_led_effects_set_zone_effect_cycling(struct hidpp20_device *device,
 						      uint8_t zone_index,
 						      uint16_t period)
 {
-	union hidpp20_message msg = {
-		.msg.report_id = REPORT_ID_LONG,
-		.msg.device_idx = device->index,
-		.msg.address = CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT,
-		.msg.parameters[0] = zone_index,
-		.msg.parameters[1] = HIDPP20_COLOR_LED_EFFECT_TYPE_CYCLING,
-		/* [7] and [8] are BE period */
-		.msg.parameters[9] = 0, /* intensity [0-100]: default */
-		.msg.parameters[12] = 1, /* RAM + EEPROM */
-	};
-	uint8_t feature_index;
+	union hidpp20_color_led_zone_effect_param params = {0};
 
+	hidpp20_color_led_effects_set_params_cycling(&params, period);
 
-	feature_index = hidpp_root_get_feature_idx(device,
-						   HIDPP_PAGE_COLOR_LED_EFFECTS);
-	if (feature_index == 0)
-		return -ENOTSUP;
+	return hidpp20_color_led_effects_set_zone_effect(device,
+							 zone_index,
+							 &params);
+}
 
-	msg.msg.sub_id = feature_index;
-	/* period must be a multiple of the
-	 * hidpp20_color_led_effects_get_zone_effect period */
-	hidpp_set_unaligned_be_u16(&msg.msg.parameters[7], period);
+static void
+hidpp20_color_led_effects_set_params_color_wave(union hidpp20_color_led_zone_effect_param *params,
+					       uint8_t r, uint8_t g, uint8_t b,
+					       uint16_t ms)
+{
+	params->color_wave.effectID = HIDPP20_COLOR_LED_EFFECT_TYPE_WAVE;
+	params->color_wave.red_start = r;
+	params->color_wave.green_start = g;
+	params->color_wave.blue_start = b;
+	params->color_wave.red_stop = 0;
+	params->color_wave.green_stop = 0;
+	params->color_wave.blue_stop = 0;
+	params->color_wave.speed_LSB = ms & 0xff;
+	params->color_wave.speed_MSB = (ms >> 8) & 0xff;
+	params->color_wave.direction = 0; /* default */
+	params->color_wave.intensity = 100;
+}
 
-	return hidpp20_request_command(device, &msg);
+int hidpp20_color_led_effects_set_zone_effect_color_wave(struct hidpp20_device *device,
+							 uint8_t zone_index,
+							 uint8_t r, uint8_t g, uint8_t b,
+							 uint16_t ms)
+{
+	union hidpp20_color_led_zone_effect_param params = {0};
+
+	hidpp20_color_led_effects_set_params_color_wave(&params, r, g, b, ms);
+
+	return hidpp20_color_led_effects_set_zone_effect(device,
+							 zone_index,
+							 &params);
 }
 
 enum hidpp20_color_led_effects_zone_effect_breathing_waveform {
@@ -1180,37 +1283,32 @@ enum hidpp20_color_led_effects_zone_effect_breathing_waveform {
 	HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_EXPONENTIAL,
 };
 
+static void
+hidpp20_color_led_effects_set_params_breathing(union hidpp20_color_led_zone_effect_param *params,
+					       uint8_t r, uint8_t g, uint8_t b,
+					       uint16_t ms)
+{
+	params->pulsing_wave.effectID = HIDPP20_COLOR_LED_EFFECT_TYPE_PULSING_WAVE;
+	params->pulsing_wave.red = r;
+	params->pulsing_wave.green = g;
+	params->pulsing_wave.blue = b;
+	params->pulsing_wave.period = hidpp_cpu_to_be_u16(ms);
+	params->pulsing_wave.waveform = HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_DEFAULT;
+	params->pulsing_wave.intensity = 0; /* intensity [0-100]: 0:default */
+}
+
 int hidpp20_color_led_effects_set_zone_effect_breathing(struct hidpp20_device *device,
 							uint8_t zone_index,
 							uint8_t r, uint8_t g, uint8_t b,
 							uint16_t ms)
 {
-	union hidpp20_message msg = {
-		.msg.report_id = REPORT_ID_LONG,
-		.msg.device_idx = device->index,
-		.msg.address = CMD_COLOR_LED_EFFECTS_SET_ZONE_EFFECT,
-		.msg.parameters[0] = zone_index,
-		.msg.parameters[1] = HIDPP20_COLOR_LED_EFFECT_TYPE_PULSING_WAVE,
-		.msg.parameters[2] = r,
-		.msg.parameters[3] = g,
-		.msg.parameters[4] = b,
-		.msg.parameters[5] = 0, /* ms msb */
-		.msg.parameters[6] = 0, /* ms lsb */
-		.msg.parameters[7] = HIDPP20_COLOR_LED_EFFECTS_ZONE_EFFECT_BREATHING_WAVEFORM_DEFAULT,
-		.msg.parameters[8] = 0, /* intensity [0-100]: 0:default */
-		.msg.parameters[12] = 1, /* RAM + EEPROM */
-	};
-	uint8_t feature_index;
+	union hidpp20_color_led_zone_effect_param params = {0};
 
-	feature_index = hidpp_root_get_feature_idx(device,
-						   HIDPP_PAGE_COLOR_LED_EFFECTS);
-	if (feature_index == 0)
-		return -ENOTSUP;
+	hidpp20_color_led_effects_set_params_breathing(&params, r, g, b, ms);
 
-	msg.msg.sub_id = feature_index;
-	hidpp_set_unaligned_be_u16(&msg.msg.parameters[5], ms);
-
-	return hidpp20_request_command(device, &msg);
+	return hidpp20_color_led_effects_set_zone_effect(device,
+							 zone_index,
+							 &params);
 }
 
 struct _hidpp20_color_led_effect_settings {
