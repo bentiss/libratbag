@@ -33,8 +33,9 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdio.h>
 #include <string.h>
+#include <time.h>
+#include <stdlib.h>
 
 #include "hidpp20.h"
 #include "libratbag.h"
@@ -2348,6 +2349,41 @@ int hidpp20_onboard_profiles_write(struct hidpp20_device *device,
 
 	memcpy(pdata.profile.name.txt, profile->name, sizeof(profile->name));
 
+	{
+		union hidpp20_color_led_zone_effect_param color_effect = {0};
+		int e;
+
+		srand(time(NULL));
+		e = rand() % 4;
+		switch (e) {
+		case 0:
+			hidpp_log_error(&device->base, "Setting to disabled\n");
+			hidpp20_color_led_effects_set_params_disabled(&color_effect);
+			break;
+		case 1:
+			hidpp_log_error(&device->base, "Setting to fixed\n");
+			hidpp20_color_led_effects_set_params_fixed(&color_effect,
+								   rand() % 0xff,
+								   rand() % 0xff,
+								   rand() % 0xff);
+			break;
+		case 2:
+			hidpp_log_error(&device->base, "Setting to cycling\n");
+			hidpp20_color_led_effects_set_params_cycling(&color_effect, 5000);
+			break;
+		case 3:
+			hidpp_log_error(&device->base, "Setting to breathing\n");
+			hidpp20_color_led_effects_set_params_breathing(&color_effect,
+									rand() % 0xff,
+									rand() % 0xff,
+									rand() % 0xff,
+									5000);
+			break;
+		}
+		memcpy(pdata.profile.logo_effect, &color_effect, sizeof(color_effect));
+		memcpy(pdata.profile.side_effects, &color_effect, sizeof(color_effect));
+	}
+
 	rc = hidpp20_onboard_profiles_write_page(device, index + 1, data);
 	if (rc < 0)
 		return rc;
@@ -2486,13 +2522,6 @@ hidpp20_device_new(const struct hidpp_device *base, unsigned int idx)
 
 		}
 
-		printf("Setting to fixed\n");
-		hidpp20_color_led_effects_set_zone_effect_fixed(dev, 0, 255, 255, 0);
-		printf("Setting to breathing\n");
-		hidpp20_color_led_effects_set_zone_effect_breathing(dev, 0, 255, 0, 255, 400);
-
-		printf("Setting to cycling\n");
-		hidpp20_color_led_effects_set_zone_effect_cycling(dev, 0, 1000);
 		printf(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: %s:%d:%s() - \n", __FILE__, __LINE__, __func__);
 	}
 
