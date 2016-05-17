@@ -649,13 +649,6 @@ hidpp20drv_init_feature(struct ratbag_device *device, uint16_t feature)
 	struct hidpp20drv_data *drv_data = ratbag_get_drv_data(device);
 	struct ratbag *ratbag = device->ratbag;
 	int rc;
-	uint8_t feature_index, feature_type, feature_version;
-
-	rc = hidpp_root_get_feature(drv_data->dev,
-				    feature,
-				    &feature_index,
-				    &feature_type,
-				    &feature_version);
 
 	switch (feature) {
 	case HIDPP_PAGE_ROOT:

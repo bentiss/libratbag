@@ -80,11 +80,6 @@ hidpp20_device_destroy(struct hidpp20_device *device);
 
 #define HIDPP_PAGE_ROOT					0x0000
 
-int hidpp_root_get_feature(struct hidpp20_device *device,
-			   uint16_t feature,
-			   uint8_t *feature_index,
-			   uint8_t *feature_type,
-			   uint8_t *feature_version);
 int hidpp20_root_get_protocol_version(struct hidpp20_device *dev,
 				      unsigned *major,
 				      unsigned *minor);

@@ -196,8 +196,7 @@ hidpp_root_get_feature_idx(struct hidpp20_device *device,
 	return 0;
 }
 
-
-int
+static int
 hidpp_root_get_feature(struct hidpp20_device *device,
 		       uint16_t feature,
 		       uint8_t *feature_index,
