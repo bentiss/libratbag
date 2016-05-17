@@ -89,6 +89,9 @@ int hidpp20_root_get_protocol_version(struct hidpp20_device *dev,
 
 #define HIDPP_PAGE_FEATURE_SET				0x0001
 
+int
+hidpp20_feature_set_has_feature(struct hidpp20_device *device, uint16_t feature);
+
 /* -------------------------------------------------------------------------- */
 /* 0x0003: Device Info                                                        */
 /* -------------------------------------------------------------------------- */

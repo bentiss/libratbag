@@ -357,6 +357,15 @@ err:
 	return rc;
 }
 
+int
+hidpp20_feature_set_has_feature(struct hidpp20_device *device, uint16_t feature)
+{
+	if (feature == 0x0000)
+		return 1;
+
+	return !!hidpp_root_get_feature_idx(device, feature);
+}
+
 /* -------------------------------------------------------------------------- */
 /* 0x1000: Battery level status                                               */
 /* -------------------------------------------------------------------------- */
