@@ -259,6 +259,29 @@ int hidpp20_adjustable_dpi_set_sensor_dpi(struct hidpp20_device *device,
 #define HIDPP_PAGE_COLOR_LED_EFFECTS			0x8070
 
 /* -------------------------------------------------------------------------- */
+/* 0x8080 - Simple Onboard Profiles                                           */
+/* -------------------------------------------------------------------------- */
+
+#define HIDPP_PAGE_SIMPLE_ONBOARD_PROFILES		0x8080
+
+struct hidpp20_simple_profile {
+	uint8_t num_buttons;
+	uint8_t num_modes;
+};
+
+int
+hidpp20_simple_profiles_read_memory(struct hidpp20_device *device,
+				    uint8_t result[45]);
+
+int
+hidpp20_simple_profiles_read(struct hidpp20_device *device,
+			     struct hidpp20_simple_profile *profile);
+
+int
+hidpp20_simple_profiles_write(struct hidpp20_device *device,
+			      struct hidpp20_simple_profile *profile);
+
+/* -------------------------------------------------------------------------- */
 /* 0x8100 - Onboard Profiles                                                  */
 /* -------------------------------------------------------------------------- */
 

@@ -904,6 +904,190 @@ int hidpp20_adjustable_dpi_set_sensor_dpi(struct hidpp20_device *device,
 }
 
 /* -------------------------------------------------------------------------- */
+/* 0x8080 - Simple Onboard Profiles                                           */
+/* -------------------------------------------------------------------------- */
+
+#define CMD_SIMPLE_PROFILES_MEMORY_START		0x20
+#define CMD_SIMPLE_PROFILES_MEMORY_CONTINUE		0x30
+#define CMD_SIMPLE_PROFILES_MEMORY_END			0x40
+
+#define SIMPLE_PROFILE_PAGE_SIZE			15
+#define SIMPLE_PROFILE_PAGE_COUNT			3
+
+static int
+hidpp20_simple_profiles_memory_start(struct hidpp20_device *device,
+				     uint8_t read)
+{
+	uint8_t feature_index;
+	int rc;
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_SHORT,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_SIMPLE_PROFILES_MEMORY_START,
+		.msg.parameters[0] = 0x80 | (!read),
+		.msg.parameters[1] = 0x2a,
+	};
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_SIMPLE_ONBOARD_PROFILES);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+static int
+hidpp20_simple_profiles_memory_continue(struct hidpp20_device *device,
+					uint8_t addr,
+					uint8_t data[SIMPLE_PROFILE_PAGE_SIZE])
+{
+	uint8_t feature_index;
+	int rc;
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_SIMPLE_PROFILES_MEMORY_CONTINUE,
+		.msg.parameters[0] = addr,
+	};
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_SIMPLE_ONBOARD_PROFILES);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+
+	memcpy(&msg.msg.parameters[1], data, SIMPLE_PROFILE_PAGE_SIZE);
+
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	memcpy(data, &msg.msg.parameters[1], SIMPLE_PROFILE_PAGE_SIZE);
+
+	return 0;
+}
+
+static int
+hidpp20_simple_profiles_memory_end(struct hidpp20_device *device)
+{
+	uint8_t feature_index;
+	int rc;
+	union hidpp20_message msg = {
+		.msg.report_id = REPORT_ID_LONG,
+		.msg.device_idx = device->index,
+		.msg.address = CMD_SIMPLE_PROFILES_MEMORY_END,
+		.msg.parameters[0] = 0x82,
+		.msg.parameters[1] = 0x01,
+	};
+
+	feature_index = hidpp_root_get_feature_idx(device,
+						   HIDPP_PAGE_SIMPLE_ONBOARD_PROFILES);
+	if (feature_index == 0)
+		return -ENOTSUP;
+
+	msg.msg.sub_id = feature_index;
+
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+int
+hidpp20_simple_profiles_read_memory(struct hidpp20_device *device,
+				    uint8_t result[45])
+{
+	unsigned i;
+	int rc;
+
+	rc = hidpp20_simple_profiles_memory_start(device, 1);
+	if (rc)
+		return rc;
+
+	for (i = 0; i < SIMPLE_PROFILE_PAGE_COUNT; i++) {
+		rc = hidpp20_simple_profiles_memory_continue(device,
+							     i + 1,
+							     &result[i * SIMPLE_PROFILE_PAGE_SIZE]);
+		if (rc)
+			return rc;
+	}
+
+	return 0;
+}
+
+static int
+hidpp20_simple_profiles_write_memory(struct hidpp20_device *device,
+				     uint8_t data[SIMPLE_PROFILE_PAGE_SIZE * SIMPLE_PROFILE_PAGE_COUNT])
+{
+	unsigned i;
+	int rc;
+
+	rc = hidpp20_simple_profiles_memory_start(device, 0);
+	if (rc)
+		return rc;
+
+	for (i = 0; i < 3; i++) {
+		rc = hidpp20_simple_profiles_memory_continue(device,
+							     i + 1,
+							     &data[i * 15]);
+		if (rc)
+			return rc;
+	}
+
+	rc = hidpp20_simple_profiles_memory_end(device);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+int
+hidpp20_simple_profiles_read(struct hidpp20_device *device,
+			     struct hidpp20_simple_profile *profile)
+{
+	uint8_t internal_data[SIMPLE_PROFILE_PAGE_SIZE * SIMPLE_PROFILE_PAGE_COUNT];
+	int rc;
+
+	rc = hidpp20_simple_profiles_read_memory(device, internal_data);
+	if (rc)
+		return rc;
+
+	memset(profile, 0, sizeof(struct hidpp20_simple_profile));
+
+	/* FIXME: parse the incoming profile */
+
+	return -ENOTSUP;
+}
+
+int
+hidpp20_simple_profiles_write(struct hidpp20_device *device,
+			      struct hidpp20_simple_profile *profile)
+{
+	uint8_t internal_data[SIMPLE_PROFILE_PAGE_SIZE * SIMPLE_PROFILE_PAGE_COUNT];
+	int rc;
+
+	rc = hidpp20_simple_profiles_read_memory(device, internal_data);
+	if (rc)
+		return rc;
+
+	/* FIXME: fill the raw profile */
+
+	rc = hidpp20_simple_profiles_write_memory(device, internal_data);
+	if (rc)
+		return rc;
+
+	return -ENOTSUP;
+}
+
+/* -------------------------------------------------------------------------- */
 /* 0x8100 - Onboard Profiles                                                  */
 /* -------------------------------------------------------------------------- */
 
