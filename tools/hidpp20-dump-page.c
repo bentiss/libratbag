@@ -30,7 +30,7 @@
 #include <libratbag-util.h>
 
 static inline int
-dump_page(struct hidpp20_device *dev, uint8_t rom, size_t page, size_t offset)
+dump_page_8100(struct hidpp20_device *dev, uint8_t rom, size_t page, size_t offset)
 {
 	int rc = 0;
 	uint8_t bytes[16];
@@ -49,13 +49,43 @@ dump_page(struct hidpp20_device *dev, uint8_t rom, size_t page, size_t offset)
 }
 
 static inline int
-dump_all_pages(struct hidpp20_device *dev, uint8_t rom)
+dump_page_8080(struct hidpp20_device *dev, size_t offset)
+{
+	int rc = 0;
+	uint8_t bytes[45];
+	size_t i;
+
+	rc = hidpp20_simple_profiles_read_memory(dev, bytes);
+	if (rc)
+		return rc;
+
+	for (i = offset / 15; i < 3; i++) {
+		hidpp_log_info(&dev->base, "FLASH: page 0x00 off 0x%02zx: ", i * 15);
+
+		hidpp_log_buf_info(&dev->base, " ", &bytes[i], 15);
+	}
+
+	return rc;
+}
+
+static int
+dump_page(struct hidpp20_device *dev, uint8_t rom, size_t page, size_t offset)
+{
+	if (hidpp20_feature_set_has_feature(dev, 0x8100))
+		return dump_page_8100(dev, rom, page, offset);
+
+	if (hidpp20_feature_set_has_feature(dev, 0x8080))
+		return dump_page_8080(dev, offset);
+}
+
+static inline int
+dump_all_pages_8100(struct hidpp20_device *dev, uint8_t rom)
 {
 	uint8_t page;
 	int rc = 0;
 
 	for (page = 0; page < 31; page++) {
-		rc = dump_page(dev, rom, page, 0);
+		rc = dump_page_8100(dev, rom, page, 0);
 		if (rc != 0)
 			break;
 	}
@@ -76,11 +106,23 @@ dump_everything(struct hidpp20_device *dev)
 {
 	int rc;
 
-	rc = dump_all_pages(dev, 0);
-	if (rc)
-		return rc;
+	if (hidpp20_feature_set_has_feature(dev, 0x8100)) {
+		rc = dump_all_pages_8100(dev, 0);
+		if (rc)
+			return rc;
 
-	return dump_all_pages(dev, 1);
+		return dump_all_pages_8100(dev, 1);
+	}
+
+	if (hidpp20_feature_set_has_feature(dev, 0x8080)) {
+		rc = dump_page_8080(dev, 0);
+		if (rc)
+			return rc;
+
+		return 0;
+	}
+
+	return -ENOTSUP;
 }
 
 void
