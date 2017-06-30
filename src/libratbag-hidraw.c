@@ -1312,7 +1312,7 @@ ratbag_open_hidraw_node(struct ratbag_device *device, struct udev_device *hidraw
 	}
 
 	devnode = udev_device_get_devnode(hidraw_udev);
-	fd = ratbag_open_path(device, devnode, O_RDWR);
+	fd = ratbag_open_path(device->ratbag, devnode, O_RDWR);
 	if (fd < 0)
 		goto err;
 
@@ -1363,7 +1363,7 @@ ratbag_open_hidraw_node(struct ratbag_device *device, struct udev_device *hidraw
 
 err:
 	if (fd >= 0)
-		ratbag_close_fd(device, fd);
+		ratbag_close_fd(device->ratbag, fd);
 	return -errno;
 }
 
@@ -1513,7 +1513,7 @@ ratbag_close_hidraw(struct ratbag_device *device)
 		device->hidraw.sysname = NULL;
 	}
 
-	ratbag_close_fd(device, device->hidraw.fd);
+	ratbag_close_fd(device->ratbag, device->hidraw.fd);
 	device->hidraw.fd = -1;
 
 	if (device->hidraw.reports) {

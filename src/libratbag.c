@@ -24,6 +24,8 @@
 #include "config.h"
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <libevdev/libevdev.h>
 #include <libudev.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -386,8 +388,48 @@ get_device_name(struct udev_device *device)
 	return strndup(&prop[1], strlen(prop) - 2);
 }
 
+static int
+get_product_info_from_evdev(struct ratbag *ratbag,
+			    struct udev_device *device,
+			    struct input_id *id,
+			    const char **name)
+{
+	const char *sysname;
+	const char *devnode;
+	struct libevdev *dev = NULL;
+	int fd, res = -1;
+
+	sysname = udev_device_get_sysname(device);
+	if (!strneq("event", sysname, 5))
+		return -ENODEV;
+
+	devnode = udev_device_get_devnode(device);
+	fd = ratbag_open_path(ratbag, devnode, O_RDWR);
+	if (fd < 0)
+		return -ENODEV;
+
+	res = libevdev_new_from_fd(fd, &dev);
+	if (res)
+		goto out;
+
+	id->bustype = libevdev_get_id_bustype(dev);
+	id->vendor = libevdev_get_id_vendor(dev);
+	id->product = libevdev_get_id_product(dev);
+	id->version = libevdev_get_id_version(dev);
+
+	*name = strdup_safe(libevdev_get_name(dev));
+
+ out:
+	libevdev_free(dev);
+	if (fd >= 0)
+		ratbag_close_fd(ratbag, fd);
+	return res;
+}
+
 static inline int
-get_product_id(struct udev_device *device, struct input_id *id)
+get_product_id(struct ratbag *ratbag,
+	       struct udev_device *device,
+	       struct input_id *id)
 {
 	const char *product;
 	struct input_id ids;
@@ -413,7 +455,7 @@ ratbag_device_new_from_udev_device(struct ratbag *ratbag,
 {
 	struct ratbag_device *device = NULL;
 	enum ratbag_error_code error = RATBAG_ERROR_DEVICE;
-	_cleanup_free_ char *name = NULL;
+	_cleanup_free_ const char *name = NULL;
 	struct input_id id;
 
 	assert(ratbag != NULL);
@@ -423,12 +465,14 @@ ratbag_device_new_from_udev_device(struct ratbag *ratbag,
 	if (udev_prop_value(udev_device, "ID_INPUT_MOUSE") == NULL)
 		goto out_err;
 
-	if (get_product_id(udev_device, &id) != 0)
-		goto out_err;
-
-	name = get_device_name(udev_device);
-	if (!name)
-		goto out_err;
+	if (get_product_id(ratbag, udev_device, &id) == 0) {
+		name = get_device_name(udev_device);
+		if (!name)
+			goto out_err;
+	} else {
+		if (get_product_info_from_evdev(ratbag, udev_device, &id, &name))
+			goto out_err;
+	}
 
 	device = ratbag_device_new(ratbag, udev_device, name, &id);
 	if (!device)

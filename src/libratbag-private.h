@@ -335,18 +335,14 @@ ratbag_button_enable_action_type(struct ratbag_button *button,
 }
 
 static inline int
-ratbag_open_path(struct ratbag_device *device, const char *path, int flags)
+ratbag_open_path(struct ratbag *ratbag, const char *path, int flags)
 {
-	struct ratbag *ratbag = device->ratbag;
-
 	return ratbag->interface->open_restricted(path, flags, ratbag->userdata);
 }
 
 static inline void
-ratbag_close_fd(struct ratbag_device *device, int fd)
+ratbag_close_fd(struct ratbag *ratbag, int fd)
 {
-	struct ratbag *ratbag = device->ratbag;
-
 	return ratbag->interface->close_restricted(fd, ratbag->userdata);
 }
 
