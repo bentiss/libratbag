@@ -1,89 +1,74 @@
-libratbag_references:
-  default_settings: &default_settings
-    working_directory: ~/libratbag
-  build_and_test: &build_and_test
-    run:
-      name: Build and test
-      command: |
-        meson build --prefix=/usr
-        mesonconf build
-        ninja -C build test
-  install: &install
-    run:
-      name: Installing
-      command: ninja -C build install
-  check_uninstall: &check_uninstall
-    run:
-      name: Checking if any files are left after uninstall
-      command: |
-        PREFIX=/root/test_install
-        # workaround until https://github.com/mesonbuild/meson/pull/2033 is merged
-        # and a new release appears
-        git clone https://github.com/whot/meson -b wip/remove-directories-on-uninstall
-        ./meson/meson.py build_install --prefix=$PREFIX
-        ninja -C build_install install
-        ninja -C build_install uninstall
-        if [ -d $PREFIX ]
-        then
-          tree $PREFIX
-          exit 1
-        fi
-  export_logs: &export_logs
-    store_artifacts:
-      path: ~/libratbag/build/meson-logs
+# Expanded YAML file for CircleCI
+#
+# lines starting with '#' are comments (that can be useful)
+# YAML files are translated into a dict/list/string of data, it can only handle
+# - dictionaries (no prefix):
+#   foo: bar
+# - lists ('-' as prefix):
+#    - foo: baz
+# - strings (baz right above)
+# you can also have references with the & and * operators, but let's have
+# something simple first
+#
+# to summarize, the following:
+# foo:
+#   - bar
+#   - baz
+#
+# can be translated in python as: {"foo": ["bar", "baz"]}
 
-
-fedora_settings: &fedora_settings
-  <<: *default_settings
-  steps:
-    - run:
-        name: Install prerequisites
-        command: dnf install -y tree git gcc gcc-c++ meson check-devel libudev-devel libevdev-devel doxygen graphviz valgrind
-    - checkout
-    - *build_and_test
-    - *install
-    - *check_uninstall
-    - *export_logs
-
-
-ubuntu_settings: &ubuntu_settings
-  <<: *default_settings
-  steps:
-    - run:
-        name: Install prerequisites
-        command: |
-          apt-get update
-          apt-get install -y software-properties-common
-          add-apt-repository universe
-          apt-get update
-          apt-get install -y tree git gcc g++ pkg-config meson check libudev-dev libevdev-dev libsystemd-dev doxygen graphviz valgrind
-    - checkout
-    - *build_and_test
-    - *install
-    - *check_uninstall
-    - *export_logs
-
-
+# First thing to do is tell CircleCI which version you want to use:
 version: 2
+
+# then we declare some jobs:
 jobs:
+# this is a dict of item that can have any name
   fedora_rawhide:
-    <<: *fedora_settings
+    # this tells where to clone the repository
+    working_directory: ~/libratbag
+    # let's have a base image for our build (it pulls directly from
+    # the docker registery)
     docker:
       - image: fedora:rawhide
-  fedora_latest:
-    <<: *fedora_settings
-    docker:
-      - image: fedora:latest
-  ubuntu_17_04:
-    <<: *ubuntu_settings
-    docker:
-      - image: ubuntu:zesty
+    # now declare what steps are required for the test
+    # each step will have its own entry on the web UI, and if a step fails,
+    # CircleCI will skip the rest
+    steps:
+      # run some arbitrary command
+      - run:
+          # name is the string shown on the web UI (can be ommitted)
+          name: Install prerequisites
+          # command is what will be executed
+          command: dnf install -y tree git gcc gcc-c++ meson check-devel libudev-devel libevdev-devel doxygen graphviz valgrind
+      # now tell CircleCI to actually checkout our code
+      - checkout
+      # run a build and test
+      - run:
+          name: Build and test
+          # YAML syntax sugar: if an entry starts with '|', the rest is
+          # translated with the line ends
+          command: |
+            meson build --prefix=/usr
+            mesonconf build
+            ninja -C build test
+      # an other test
+      - run:
+          name: Installing
+          command: ninja -C build install
+      # finally export the logs given the container is going to be destroyed
+      # (you can have several of these store_artifacts if you need to save
+      # more than one directlry)
+      - store_artifacts:
+          path: ~/libratbag/build/meson-logs
 
-
+# and now we can declare some workflows (this is optional unless you want
+# to run several tests at once)
 workflows:
+  # always version 2
   version: 2
+  # the name of the workflow (can be anything)
   compile_and_test:
+    # and we declare which jobs are we calling
     jobs:
+      # the jobs are the one declared in the jobs dict above
       - fedora_rawhide
-      - ubuntu_17_04
-      #- fedora_latest
