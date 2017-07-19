@@ -104,6 +104,27 @@ static int ratbagd_resolution_set_resolution(sd_bus_message *m,
 	return sd_bus_reply_method_return(m, "u", r);
 }
 
+static int ratbagd_resolution_set_active(sd_bus_message *m,
+					 void *userdata,
+					 sd_bus_error *error)
+{
+	struct ratbagd_resolution *resolution = userdata;
+	int r;
+
+	r = ratbag_resolution_set_active(resolution->lib_resolution);
+	if (r < 0)
+		return r;
+
+	(void) sd_bus_emit_signal(sd_bus_message_get_bus(m),
+				  resolution->path,
+				  RATBAGD_NAME_ROOT ".Resolution",
+				  "ActiveResolutionChanged",
+				  "u",
+				  resolution->index);
+
+	return sd_bus_reply_method_return(m, "u", r);
+}
+
 static int ratbagd_resolution_set_default(sd_bus_message *m,
 					  void *userdata,
 					  sd_bus_error *error)
@@ -256,6 +277,7 @@ const sd_bus_vtable ratbagd_resolution_vtable[] = {
 	SD_BUS_PROPERTY("Minimum", "u", ratbagd_resolution_get_minimum, 0, SD_BUS_VTABLE_PROPERTY_CONST),
 	SD_BUS_METHOD("SetReportRate", "u", "u", ratbagd_resolution_set_report_rate, SD_BUS_VTABLE_UNPRIVILEGED),
 	SD_BUS_METHOD("SetResolution", "uu", "u", ratbagd_resolution_set_resolution, SD_BUS_VTABLE_UNPRIVILEGED),
+	SD_BUS_METHOD("SetActive", "", "u", ratbagd_resolution_set_active, SD_BUS_VTABLE_UNPRIVILEGED),
 	SD_BUS_METHOD("SetDefault", "", "u", ratbagd_resolution_set_default, SD_BUS_VTABLE_UNPRIVILEGED),
 	SD_BUS_SIGNAL("ActiveResolutionChanged", "u", 0),
 	SD_BUS_SIGNAL("DefaultResolutionChanged", "u", 0),
