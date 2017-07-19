@@ -161,13 +161,15 @@ def print_resolution(d, p, r, level):
 
 
 def print_profile(d, p, level):
-    print(" " * level + "Resolutions:")
-    for r in p.resolutions:
-        print_resolution(d, p, r, level + 2)
-    for b in p.buttons:
-        print_button(d, p, b, level)
-    for l in p.leds:
-        print_led(d, p, l, level)
+    print(" " * (level - 2) + "Profile {}:{}".format(p.index, " <disabled>" if not p.enabled else ""))
+    if p.enabled:
+        print(" " * level + "Resolutions:")
+        for r in p.resolutions:
+            print_resolution(d, p, r, level + 2)
+        for b in p.buttons:
+            print_button(d, p, b, level)
+        for l in p.leds:
+            print_led(d, p, l, level)
 
 
 def print_device(d, level):
@@ -334,6 +336,18 @@ def func_profile_active_set(r, args):
     d.commit()
 
 
+def func_profile_enable(r, args):
+    p, d = find_profile(r, args)
+    p.enable()
+    d.commit()
+
+
+def func_profile_disable(r, args):
+    p, d = find_profile(r, args)
+    p.disable()
+    d.commit()
+
+
 def func_dummy(r, args):
     print("uh, oh, not implemented")
     pr_debug(args, r, args)
@@ -478,7 +492,7 @@ parser_def = [
                         arg_type: int,
                     },
                 ],
-                func: func_dummy,  # FIXME: func_profile_enable,
+                func: func_profile_enable,
             },
             {
                 of_type: command,
@@ -493,7 +507,7 @@ parser_def = [
                         arg_type: int,
                     },
                 ],
-                func: func_dummy,  # FIXME: func_profile_disable,
+                func: func_profile_disable,
             },
         ],
         N_access: {

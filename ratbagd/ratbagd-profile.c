@@ -197,6 +197,9 @@ static int ratbagd_profile_get_active_resolution(sd_bus *bus,
 	struct ratbagd_resolution *resolution;
 	unsigned int i;
 
+	if (!ratbag_profile_is_enabled(profile->lib_profile))
+		return sd_bus_message_append(reply, "u", 0);
+
 	for (i = 0; i < profile->n_resolutions; ++i) {
 		resolution = profile->resolutions[i];
 		if (!resolution)
@@ -223,6 +226,9 @@ static int ratbagd_profile_get_default_resolution(sd_bus *bus,
 	struct ratbagd_profile *profile = userdata;
 	struct ratbagd_resolution *resolution;
 	unsigned int i;
+
+	if (!ratbag_profile_is_enabled(profile->lib_profile))
+		return sd_bus_message_append(reply, "u", 0);
 
 	for (i = 0; i < profile->n_resolutions; ++i) {
 		resolution = profile->resolutions[i];
@@ -323,6 +329,43 @@ static int ratbagd_profile_set_active(sd_bus_message *m,
                                           ratbag_profile_set_active(profile->lib_profile));
 }
 
+static int ratbagd_profile_set_enable(sd_bus_message *m,
+				      void *userdata,
+				      sd_bus_error *error,
+				      bool enabled)
+{
+	struct ratbagd_profile *profile = userdata;
+	int r;
+
+	r = sd_bus_message_read(m, "");
+	if (r < 0)
+		return r;
+
+	(void) sd_bus_emit_signal(sd_bus_message_get_bus(m),
+				  RATBAGD_OBJ_ROOT,
+				  RATBAGD_NAME_ROOT ".Profile",
+				  "EnabledProfileChanged",
+				  "u",
+				  profile->index);
+	r = ratbag_profile_set_enabled(profile->lib_profile, enabled);
+
+	return sd_bus_reply_method_return(m, "u", r);
+}
+
+static int ratbagd_profile_enable(sd_bus_message *m,
+				  void *userdata,
+				  sd_bus_error *error)
+{
+	return ratbagd_profile_set_enable(m, userdata, error, true);
+}
+
+static int ratbagd_profile_disable(sd_bus_message *m,
+				  void *userdata,
+				  sd_bus_error *error)
+{
+	return ratbagd_profile_set_enable(m, userdata, error, false);
+}
+
 static int ratbagd_profile_get_resolution_by_index(sd_bus_message *m,
 						   void *userdata,
 						   sd_bus_error *error)
@@ -344,17 +387,35 @@ static int ratbagd_profile_get_resolution_by_index(sd_bus_message *m,
 					  ratbagd_resolution_get_path(resolution));
 }
 
+static int ratbagd_profile_is_enabled(sd_bus *bus,
+				      const char *path,
+				      const char *interface,
+				      const char *property,
+				      sd_bus_message *reply,
+				      void *userdata,
+				      sd_bus_error *error)
+{
+	struct ratbagd_profile *profile = userdata;
+	bool enabled = ratbag_profile_is_enabled(profile->lib_profile) != 0;
+
+	return sd_bus_message_append(reply, "b", enabled);
+}
+
 const sd_bus_vtable ratbagd_profile_vtable[] = {
 	SD_BUS_VTABLE_START(0),
+	SD_BUS_PROPERTY("Enabled", "b", ratbagd_profile_is_enabled, 0, 0),
 	SD_BUS_PROPERTY("Index", "u", NULL, offsetof(struct ratbagd_profile, index), SD_BUS_VTABLE_PROPERTY_CONST),
 	SD_BUS_PROPERTY("Resolutions", "ao", ratbagd_profile_get_resolutions, 0, 0),
 	SD_BUS_PROPERTY("Buttons", "ao", ratbagd_profile_get_buttons, 0, 0),
 	SD_BUS_PROPERTY("Leds", "ao", ratbagd_profile_get_leds, 0, 0),
 	SD_BUS_PROPERTY("ActiveResolution", "u", ratbagd_profile_get_active_resolution, 0, 0),
 	SD_BUS_PROPERTY("DefaultResolution", "u", ratbagd_profile_get_default_resolution, 0, 0),
+	SD_BUS_METHOD("Enable", "", "u", ratbagd_profile_enable, SD_BUS_VTABLE_UNPRIVILEGED),
+	SD_BUS_METHOD("Disable", "", "u", ratbagd_profile_disable, SD_BUS_VTABLE_UNPRIVILEGED),
 	SD_BUS_METHOD("SetActive", "", "u", ratbagd_profile_set_active, SD_BUS_VTABLE_UNPRIVILEGED),
 	SD_BUS_METHOD("GetResolutionByIndex", "u", "o", ratbagd_profile_get_resolution_by_index, SD_BUS_VTABLE_UNPRIVILEGED),
 	SD_BUS_SIGNAL("ActiveProfileChanged", "u", 0),
+	SD_BUS_SIGNAL("EnabledProfileChanged", "u", 0),
 	SD_BUS_VTABLE_END,
 };
 

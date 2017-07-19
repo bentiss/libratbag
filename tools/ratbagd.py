@@ -308,6 +308,8 @@ class RatbagdProfile(_RatbagdDBus):
     __gsignals__ = {
         "active-profile-changed":
             (GObject.SIGNAL_RUN_LAST, GObject.TYPE_NONE, [int]),
+        "enabled-profile-changed":
+            (GObject.SIGNAL_RUN_LAST, GObject.TYPE_NONE, [int]),
     }
 
     def __init__(self, object_path):
@@ -318,6 +320,13 @@ class RatbagdProfile(_RatbagdDBus):
         params = params.unpack()
         if signal == "ActiveProfileChanged":
             self.emit("active-profile-changed", params[0])
+        if signal == "EnabledProfileChanged":
+            self.emit("enabled-profile-changed", params[0])
+
+    @GObject.Property
+    def enabled(self):
+        """tells if the profile is enabled."""
+        return self._get_dbus_property("Enabled")
 
     @GObject.Property
     def index(self):
@@ -373,6 +382,14 @@ class RatbagdProfile(_RatbagdDBus):
     def set_active(self):
         """Set this profile to be the active profile."""
         return self._dbus_call("SetActive", "")
+
+    def enable(self):
+        """Enable this profile."""
+        return self._dbus_call("Enable", "")
+
+    def disable(self):
+        """Enable this profile."""
+        return self._dbus_call("Disable", "")
 
     def get_resolution_by_index(self, index):
         """Returns the resolution found at the given index. This function
