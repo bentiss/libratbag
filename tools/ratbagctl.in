@@ -266,6 +266,7 @@ def func_led_set(r, args):
         pass
     else:
         l.brightness = brightness
+    d.commit()
 
 
 def func_led_get_all(r, args):
@@ -282,6 +283,7 @@ def func_button_get(r, args):
 def func_button_action_set_button(r, args):
     b, p, d = find_button(r, args)
     b.mapping = args.target_button
+    d.commit()
 
 
 def func_button_count(r, args):
@@ -303,6 +305,7 @@ def func_dpi_set(r, args):
         print(args)
     else:
         r.resolution = (args.dpi_n, args.dpi_n)
+    d.commit()
 
 
 def func_resolution_get(r, args):
@@ -328,6 +331,7 @@ def func_profile_active_get(r, args):
 def func_profile_active_set(r, args):
     p, d = find_profile(r, args)
     p.set_active()
+    d.commit()
 
 
 def func_dummy(r, args):
