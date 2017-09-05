@@ -1035,8 +1035,7 @@ int hidpp20_adjustable_dpi_set_sensor_dpi(struct hidpp20_device *device,
 #define CMD_ONBOARD_PROFILES_GET_CURRENT_DPI_INDEX	0xb0
 #define CMD_ONBOARD_PROFILES_SET_CURRENT_DPI_INDEX	0xc0
 
-#define HIDPP20_PAGE_SIZE		(16*16)
-#define HIDPP20_PROFILE_SIZE		HIDPP20_PAGE_SIZE
+#define HIDPP20_PROFILE_SIZE		256
 #define HIDPP20_BUTTON_HID		0x80
 
 #define HIDPP20_MODE_NO_CHANGE				0x00
@@ -1080,26 +1079,20 @@ hidpp20_onboard_profiles_get_profiles_desc(struct hidpp20_device *device,
 }
 
 int
-hidpp20_onboard_profiles_read_memory(struct hidpp20_device *device,
-				     uint8_t read_rom,
-				     uint8_t page,
-				     uint16_t section,
-				     uint8_t result[16])
+hidpp20_onboard_profiles_read_sector(struct hidpp20_device *device,
+				     uint16_t sector,
+				     uint16_t sector_size,
+				     uint8_t *data)
 {
+	uint16_t offset;
 	uint8_t feature_index;
-	int rc;
+	int rc, count;
+	union hidpp20_message buf;
 	union hidpp20_message msg = {
 		.msg.report_id = REPORT_ID_LONG,
 		.msg.device_idx = device->index,
 		.msg.address = CMD_ONBOARD_PROFILES_MEMORY_READ,
-		.msg.parameters[0] = read_rom,
-		.msg.parameters[1] = page,
 	};
-
-	if (read_rom > 1)
-		return -EINVAL;
-
-	hidpp_set_unaligned_be_u16(&msg.msg.parameters[2], section);
 
 	feature_index = hidpp_root_get_feature_idx(device,
 						   HIDPP_PAGE_ONBOARD_PROFILES);
@@ -1107,41 +1100,57 @@ hidpp20_onboard_profiles_read_memory(struct hidpp20_device *device,
 		return -ENOTSUP;
 
 	msg.msg.sub_id = feature_index;
+	hidpp_set_unaligned_be_u16(&msg.msg.parameters[0], sector);
 
-	rc = hidpp20_request_command(device, &msg);
-	if (rc)
-		return rc;
+	count = sector_size;
 
-	/* msg.msg.parameters is guaranteed to have a size >= 16 */
-	memcpy(result, msg.msg.parameters, 16);
+	for (offset = 0; offset < sector_size; offset += 16) {
+		hidpp_set_unaligned_be_u16(&msg.msg.parameters[2], offset);
+		buf = msg;
+		rc = hidpp20_request_command(device, &buf);
+		if (rc)
+			return rc;
+
+		/* msg.msg.parameters is guaranteed to have a size >= 16 */
+		memcpy(data + offset, buf.msg.parameters, count > 16 ? 16 : count);
+
+		count -= 16;
+	}
 
 	return 0;
+}
+
+static bool
+hidpp20_onboard_profiles_is_sector_valid(struct hidpp20_device *device,
+					 uint16_t sector_size,
+					 uint8_t *data)
+{
+	uint16_t crc, read_crc;
+
+	crc = hidpp_crc_ccitt(data, sector_size - 2);
+	read_crc = hidpp_get_unaligned_be_u16(&data[sector_size - 2]);
+
+	return crc == read_crc;
 }
 
 static int
 hidpp20_onboard_profiles_write_start(struct hidpp20_device *device,
-				     uint16_t page,
-				     uint16_t section,
-				     uint16_t size)
+				     uint16_t sector,
+				     uint16_t sub_address,
+				     uint16_t count,
+				     uint8_t feature_index)
 {
-	uint8_t feature_index;
 	int rc;
 	union hidpp20_message msg = {
 		.msg.report_id = REPORT_ID_LONG,
 		.msg.device_idx = device->index,
+		.msg.sub_id = feature_index,
 		.msg.address = CMD_ONBOARD_PROFILES_MEMORY_ADDR_WRITE,
 	};
 
-	hidpp_set_unaligned_be_u16(&msg.msg.parameters[0], page);
-	hidpp_set_unaligned_be_u16(&msg.msg.parameters[2], section);
-	hidpp_set_unaligned_be_u16(&msg.msg.parameters[4], size);
-
-	feature_index = hidpp_root_get_feature_idx(device,
-						   HIDPP_PAGE_ONBOARD_PROFILES);
-	if (feature_index == 0)
-		return -ENOTSUP;
-
-	msg.msg.sub_id = feature_index;
+	hidpp_set_unaligned_be_u16(&msg.msg.parameters[0], sector);
+	hidpp_set_unaligned_be_u16(&msg.msg.parameters[2], sub_address);
+	hidpp_set_unaligned_be_u16(&msg.msg.parameters[4], count);
 
 	rc = hidpp20_request_command(device, &msg);
 	if (rc)
@@ -1151,22 +1160,16 @@ hidpp20_onboard_profiles_write_start(struct hidpp20_device *device,
 }
 
 static int
-hidpp20_onboard_profiles_write_end(struct hidpp20_device *device)
+hidpp20_onboard_profiles_write_end(struct hidpp20_device *device,
+				   uint8_t feature_index)
 {
-	uint8_t feature_index;
 	int rc;
 	union hidpp20_message msg = {
 		.msg.report_id = REPORT_ID_SHORT,
 		.msg.device_idx = device->index,
+		.msg.sub_id = feature_index,
 		.msg.address = CMD_ONBOARD_PROFILES_MEMORY_WRITE_END,
 	};
-
-	feature_index = hidpp_root_get_feature_idx(device,
-						   HIDPP_PAGE_ONBOARD_PROFILES);
-	if (feature_index == 0)
-		return -ENOTSUP;
-
-	msg.msg.sub_id = feature_index;
 
 	rc = hidpp20_request_command(device, &msg);
 	if (rc)
@@ -1177,65 +1180,64 @@ hidpp20_onboard_profiles_write_end(struct hidpp20_device *device)
 
 static int
 hidpp20_onboard_profiles_write_data(struct hidpp20_device *device,
-				    uint16_t page,
-				    uint16_t section,
 				    uint8_t *data,
-				    size_t len)
+				    uint8_t feature_index)
 {
-	uint8_t feature_index;
-	int transfered = 0;
 	int rc;
 	union hidpp20_message msg = {
 		.msg.report_id = REPORT_ID_LONG,
 		.msg.device_idx = device->index,
+		.msg.sub_id = feature_index,
 		.msg.address = CMD_ONBOARD_PROFILES_MEMORY_WRITE,
 	};
+
+	memcpy(msg.msg.parameters, data, 16);
+
+	rc = hidpp20_request_command(device, &msg);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+static int
+hidpp20_onboard_profiles_write_sector(struct hidpp20_device *device,
+				      uint16_t sector,
+				      uint16_t sector_size,
+				      uint8_t *data)
+{
+	uint8_t feature_index;
+	uint16_t crc;
+	int rc, transferred;
 
 	feature_index = hidpp_root_get_feature_idx(device,
 						   HIDPP_PAGE_ONBOARD_PROFILES);
 	if (feature_index == 0)
 		return -ENOTSUP;
 
-	msg.msg.sub_id = feature_index;
+	crc = hidpp_crc_ccitt(data, sector_size - 2);
+	hidpp_set_unaligned_be_u16(&data[sector_size - 2], crc);
 
 	rc = hidpp20_onboard_profiles_write_start(device,
-						  page,
-						  section,
-						  HIDPP20_PAGE_SIZE);
+						  sector,
+						  0,
+						  sector_size,
+						  feature_index);
 	if (rc)
 		return rc;
 
-	while (len >= 16) {
-		msg.msg.address = CMD_ONBOARD_PROFILES_MEMORY_WRITE;
-		memcpy(msg.msg.parameters, data, 16);
-
-		rc = hidpp20_request_command(device, &msg);
+	for (transferred = 0; transferred < sector_size; transferred += 16) {
+		rc = hidpp20_onboard_profiles_write_data(device, data, feature_index);
 		if (rc)
 			return rc;
-
-		len -= 16;
 		data += 16;
-		transfered += 16;
 	}
 
-	rc = hidpp20_onboard_profiles_write_end(device);
+	rc = hidpp20_onboard_profiles_write_end(device, feature_index);
 	if (rc)
 		return rc;
 
-	return transfered;
-}
-
-static int
-hidpp20_onboard_profiles_write_page(struct hidpp20_device *device,
-				    uint16_t page,
-				    uint8_t data[HIDPP20_PAGE_SIZE])
-{
-	uint16_t crc;
-
-	crc = hidpp_crc_ccitt(data, HIDPP20_PAGE_SIZE - 2);
-	hidpp_set_unaligned_be_u16(&data[HIDPP20_PROFILE_SIZE - 2], crc);
-
-	return hidpp20_onboard_profiles_write_data(device, page, 0x00, data, HIDPP20_PAGE_SIZE);
+	return 0;
 }
 
 static int
@@ -1424,13 +1426,6 @@ hidpp20_onboard_profiles_validate(struct hidpp20_device *device,
 		return false;
 	}
 
-	if (info->sector_size != HIDPP20_PAGE_SIZE) {
-		hidpp_log_error(&device->base,
-				"Unsupported sector size: %d.\n",
-				info->sector_size);
-		return false;
-	}
-
 	return true;
 }
 
@@ -1465,9 +1460,10 @@ hidpp20_onboard_profiles_allocate(struct hidpp20_device *device,
 			return rc;
 	}
 
-	profiles = zalloc(sizeof(struct hidpp20_profiles) +
-			  info.profile_count * sizeof(struct hidpp20_profile));
-
+	profiles = zalloc(sizeof(struct hidpp20_profiles));
+	profiles->profiles = zalloc(info.profile_count * sizeof(struct hidpp20_profile));
+	profiles->sector_size = info.sector_size;
+	profiles->sector_count = info.sector_count;
 	profiles->num_profiles = info.profile_count;
 	profiles->num_rom_profiles = info.profile_count_oob;
 	profiles->num_buttons = info.button_count <= 16 ? info.button_count : 16;
@@ -1542,15 +1538,18 @@ hidpp20_onboard_profiles_macro_next(struct hidpp20_device *device,
 
 static int
 hidpp20_onboard_profiles_read_macro(struct hidpp20_device *device,
+				    struct hidpp20_profiles *profiles,
 				    uint8_t page, uint8_t offset,
 				    union hidpp20_macro_data **return_macro)
 {
-	uint8_t memory[HIDPP20_PAGE_SIZE];
+	uint8_t *memory;
 	union hidpp20_macro_data *macro = NULL;
 	unsigned count = 0;
 	unsigned index = 0;
-	uint16_t mem_index = 0;
+	uint16_t mem_index = offset;
 	int rc = -ENOMEM;
+
+	memory = hidpp20_onboard_profiles_allocate_sector(profiles);
 
 	do {
 		if (count == index) {
@@ -1567,16 +1566,12 @@ hidpp20_onboard_profiles_read_macro(struct hidpp20_device *device,
 		}
 
 		if (rc == -ENOMEM) {
-			offset += mem_index;
-			rc = hidpp20_onboard_profiles_read_memory(device,
-								  0,
+			rc = hidpp20_onboard_profiles_read_sector(device,
 								  page,
-								  offset,
+								  profiles->sector_size,
 								  memory);
 			if (rc)
 				goto out_err;
-
-			mem_index = 0;
 		}
 
 		rc = hidpp20_onboard_profiles_macro_next(device,
@@ -1585,18 +1580,18 @@ hidpp20_onboard_profiles_read_macro(struct hidpp20_device *device,
 							 &macro[index]);
 		if (rc == -EFAULT)
 			goto out_err;
-
-		if (rc != -ENOMEM) {
-			if (macro[index].any.type == HIDPP20_MACRO_JUMP) {
-				page = macro[index].jump.page;
-				offset = macro[index].jump.offset;
-				mem_index = 0;
-				/* no need to store the jump in memory */
-				index--;
-				/* force memory fetching */
-				rc = -ENOMEM;
-			}
-
+		if (rc == -ENOMEM) {
+			mem_index = 0;
+			page++;
+		} else if (macro[index].any.type == HIDPP20_MACRO_JUMP) {
+			page = macro[index].jump.page;
+			offset = macro[index].jump.offset;
+			mem_index = offset;
+			/* no need to store the jump in memory */
+			index--;
+			/* force memory fetching */
+			rc = -ENOMEM;
+		} else {
 			index++;
 		}
 	} while (rc);
@@ -1605,6 +1600,7 @@ hidpp20_onboard_profiles_read_macro(struct hidpp20_device *device,
 	return index;
 
 out_err:
+	free(memory);
 	free(macro);
 
 	return rc;
@@ -1612,6 +1608,7 @@ out_err:
 
 static int
 hidpp20_onboard_profiles_parse_macro(struct hidpp20_device *device,
+				     struct hidpp20_profiles *profiles,
 				     uint8_t page, uint8_t offset,
 				     union hidpp20_macro_data **return_macro)
 {
@@ -1619,7 +1616,7 @@ hidpp20_onboard_profiles_parse_macro(struct hidpp20_device *device,
 	unsigned i, count = 0;
 	int rc;
 
-	rc = hidpp20_onboard_profiles_read_macro(device, page, offset, &macro);
+	rc = hidpp20_onboard_profiles_read_macro(device, profiles, page, offset, &macro);
 	if (rc <= 0)
 		return rc;
 
@@ -1672,25 +1669,18 @@ int
 hidpp20_onboard_profiles_initialize(struct hidpp20_device *device,
 				    struct hidpp20_profiles *profiles)
 {
-	unsigned i, offset, num_offset;
+	unsigned i;
 	int rc;
-	uint8_t data[HIDPP20_PAGE_SIZE] = {0};
+	uint8_t *data;
 
 	assert(profiles);
 
-	num_offset = hidpp20_onboard_profiles_compute_dict_size(device,
-								profiles);
+	data = hidpp20_onboard_profiles_allocate_sector(profiles);
 
-	for (offset = 0; offset < num_offset; offset += 16) {
-		rc = hidpp20_onboard_profiles_read_memory(device,
-							  0x00,
-							  0x00,
-							  offset,
-							  data + offset);
-		if (rc < 0) {
-			hidpp20_onboard_profiles_destroy(profiles);
-			return rc;
-		}
+	rc = hidpp20_onboard_profiles_read_sector(device, 0, profiles->sector_size, data);
+	if (rc < 0) {
+		free(data);
+		return rc;
 	}
 
 	for (i = 0; i < profiles->num_profiles; i++) {
@@ -1700,8 +1690,10 @@ hidpp20_onboard_profiles_initialize(struct hidpp20_device *device,
 			break;
 
 		profiles->profiles[i].index = d[1];
-		profiles->profiles[i].enabled = d[2];
+		profiles->profiles[i].enabled = !!d[2];
 	}
+
+	free(data);
 
 	return profiles->num_profiles;
 }
@@ -1724,44 +1716,29 @@ hidpp20_onboard_profiles_destroy(struct hidpp20_profiles *profiles_list)
 		}
 	}
 
+	free(profiles_list->profiles);
 	free(profiles_list);
 }
 
 static int
 hidpp20_onboard_profiles_find_and_read_profile(struct hidpp20_device *device,
 					       unsigned int index,
+					       uint16_t sector_size,
 					       uint8_t *data,
 					       unsigned int num_rom_profiles)
 {
+	uint16_t sector = index + 1;
 	int rc;
-	unsigned i;
-	uint16_t crc, read_crc;
 
-	rc = hidpp20_onboard_profiles_read_memory(device,
-						  0,
-						  index + 1,
-						  0x00,
+	rc = hidpp20_onboard_profiles_read_sector(device,
+						  sector,
+						  sector_size,
 						  data);
 	if (rc < 0)
 		return rc;
 
-	if (data[0] > 0) {
-		for (i = 1; i < HIDPP20_PROFILE_SIZE / 0x10; i++) {
-			rc = hidpp20_onboard_profiles_read_memory(device,
-								  0,
-								  index + 1,
-								  i * 0x10,
-								  data + i * 0x10);
-			if (rc < 0)
-				return rc;
-		}
-
-		crc = hidpp_crc_ccitt(data, HIDPP20_PROFILE_SIZE - 2);
-		read_crc = hidpp_get_unaligned_be_u16(&data[HIDPP20_PROFILE_SIZE - 2]);
-
-		if (crc == read_crc)
-			return 0;
-	}
+	if (hidpp20_onboard_profiles_is_sector_valid(device, sector_size, data))
+		return 0;
 
 	/* something went wrong, the mouse is using the factory profile in ROM */
 	if (num_rom_profiles == 0)
@@ -1770,15 +1747,14 @@ hidpp20_onboard_profiles_find_and_read_profile(struct hidpp20_device *device,
 	if (index >= num_rom_profiles)
 		index = num_rom_profiles - 1;
 
-	for (i = 0; i < HIDPP20_PROFILE_SIZE / 0x10; i++) {
-		rc = hidpp20_onboard_profiles_read_memory(device,
-							  1,
-							  index + 1,
-							  i * 0x10,
-							  data + i * 0x10);
-		if (rc != 0)
-			return rc;
-	}
+	sector = (1 << 8) | (index + 1);
+
+	rc = hidpp20_onboard_profiles_read_sector(device,
+						  sector,
+						  sector_size,
+						  data);
+	if (rc < 0)
+		return rc;
 
 	return 0;
 }
@@ -1789,14 +1765,16 @@ hidpp20_onboard_profiles_set_enable_profile(struct hidpp20_device *device,
 					    struct hidpp20_profiles *profiles_list)
 {
 	unsigned int i, buffer_index = 0;
-	uint8_t data[HIDPP20_PROFILE_SIZE] = {0};
+	uint16_t sector_size = profiles_list->sector_size;
+	uint8_t *data = hidpp20_onboard_profiles_allocate_sector(profiles_list);
+	int rc;
 
 	profiles_list->profiles[index].index = index + 1;
 
 	for (i = 0; i < profiles_list->num_profiles; i++) {
 		data[buffer_index++] = 0x00;
 		data[buffer_index++] = i + 1;
-		data[buffer_index++] = profiles_list->profiles[i].enabled;
+		data[buffer_index++] = !!profiles_list->profiles[i].enabled;
 		data[buffer_index++] = 0x00;
 	}
 
@@ -1806,7 +1784,7 @@ hidpp20_onboard_profiles_set_enable_profile(struct hidpp20_device *device,
 	data[buffer_index++] = 0x00;
 	data[buffer_index++] = 0x00;
 
-	memset(data + buffer_index, 0xff, sizeof(data) - buffer_index);
+	memset(data + buffer_index, 0xff, sector_size - buffer_index);
 
 	hidpp_log_buf_debug(&device->base,
 			   "dictionary: ",
@@ -1814,7 +1792,12 @@ hidpp20_onboard_profiles_set_enable_profile(struct hidpp20_device *device,
 			   hidpp20_onboard_profiles_compute_dict_size(device,
 								      profiles_list));
 
-	return hidpp20_onboard_profiles_write_page(device, 0x0000, data);
+	rc = hidpp20_onboard_profiles_write_sector(device,
+						   0x0000,
+						   sector_size,
+						   data);
+	free(data);
+	return rc;
 }
 
 union hidpp20_internal_profile {
@@ -1843,6 +1826,7 @@ _Static_assert(sizeof(union hidpp20_internal_profile) == HIDPP20_PROFILE_SIZE, "
 
 static void
 hidpp20_buttons_to_cpu(struct hidpp20_device *device,
+		       struct hidpp20_profiles *profiles,
 		       struct hidpp20_profile *profile,
 		       union hidpp20_button_binding *buttons,
 		       unsigned int count)
@@ -1881,6 +1865,7 @@ hidpp20_buttons_to_cpu(struct hidpp20_device *device,
 				profile->macros[i] = NULL;
 			}
 			hidpp20_onboard_profiles_parse_macro(device,
+							     profiles,
 							     b->macro.page,
 							     b->macro.offset,
 							     &profile->macros[i]);
@@ -1985,8 +1970,8 @@ int hidpp20_onboard_profiles_read(struct hidpp20_device *device,
 				  unsigned int index,
 				  struct hidpp20_profiles *profiles_list)
 {
-	union hidpp20_internal_profile pdata = {0};
-	uint8_t *data = pdata.data;
+	union hidpp20_internal_profile *pdata;
+	uint8_t *data;
 	struct hidpp20_profile *profile = &profiles_list->profiles[index];
 	unsigned i;
 	int rc;
@@ -1994,39 +1979,45 @@ int hidpp20_onboard_profiles_read(struct hidpp20_device *device,
 	if (index >= profiles_list->num_profiles)
 		return -EINVAL;
 
+	data = hidpp20_onboard_profiles_allocate_sector(profiles_list);
+	pdata = (union hidpp20_internal_profile *)data;
+
 	rc = hidpp20_onboard_profiles_find_and_read_profile(device,
 							    index,
+							    profiles_list->sector_size,
 							    data,
 							    profiles_list->num_rom_profiles);
 	if (rc != 0)
-		return rc;
+		goto out;
 
-	profile->report_rate = 1000 / max(1, pdata.profile.report_rate);
-	profile->default_dpi = pdata.profile.default_dpi;
-	profile->switched_dpi = pdata.profile.switched_dpi;
+	profile->report_rate = 1000 / max(1, pdata->profile.report_rate);
+	profile->default_dpi = pdata->profile.default_dpi;
+	profile->switched_dpi = pdata->profile.switched_dpi;
 
 	for (i = 0; i < 5; i++) {
 		profile->dpi[i] = hidpp_get_unaligned_le_u16(&data[2 * i + 3]);
 	}
 
 	for (i = 0; i < profiles_list->num_leds; i++)
-		hidpp20_onboard_profiles_read_led(&profile->leds[i], pdata.profile.leds[i]);
+		hidpp20_onboard_profiles_read_led(&profile->leds[i], pdata->profile.leds[i]);
 
-	hidpp20_buttons_to_cpu(device, profile, pdata.profile.buttons, profiles_list->num_buttons);
+	hidpp20_buttons_to_cpu(device, profiles_list, profile, pdata->profile.buttons, profiles_list->num_buttons);
 
-	memcpy(profile->name, pdata.profile.name.txt, sizeof(profile->name));
+	memcpy(profile->name, pdata->profile.name.txt, sizeof(profile->name));
 	/* force terminating '\0' */
 	profile->name[sizeof(profile->name) - 1] = '\0';
 
 	/* check if we are using the default name or not */
 	for (i = 0; i < sizeof(profile->name); i++) {
-		if (pdata.profile.name.raw[i] != 0xff)
+		if (pdata->profile.name.raw[i] != 0xff)
 			break;
 	}
 	if (i == sizeof(profile->name))
 		memset(profile->name, 0, sizeof(profile->name));
 
-	return 0;
+ out:
+	free(data);
+	return rc;
 }
 
 static void
@@ -2073,8 +2064,10 @@ int hidpp20_onboard_profiles_write(struct hidpp20_device *device,
 				   unsigned int index,
 				   struct hidpp20_profiles *profiles_list)
 {
-	union hidpp20_internal_profile pdata = {0};
-	uint8_t *data = pdata.data;
+	union hidpp20_internal_profile *pdata;
+	uint8_t *data;
+	uint16_t sector_size = profiles_list->sector_size;
+	uint16_t sector = index + 1;
 	struct hidpp20_profile *profile = &profiles_list->profiles[index];
 	unsigned i;
 	int rc;
@@ -2082,40 +2075,43 @@ int hidpp20_onboard_profiles_write(struct hidpp20_device *device,
 	if (index >= profiles_list->num_profiles)
 		return -EINVAL;
 
+	data = hidpp20_onboard_profiles_allocate_sector(profiles_list);
+	pdata = (union hidpp20_internal_profile *)data;
+
 	rc = hidpp20_onboard_profiles_find_and_read_profile(device,
 							    index,
+							    profiles_list->sector_size,
 							    data,
 							    profiles_list->num_rom_profiles);
 	if (rc < 0)
-		return rc;
+		goto out;
 
 	rc = hidpp20_onboard_profiles_set_enable_profile(device, index, profiles_list);
 	if (rc < 0)
-		return rc;
+		goto out;
 
-	pdata.profile.report_rate = 1000 / profile->report_rate;
-	pdata.profile.default_dpi = profile->default_dpi;
-	pdata.profile.switched_dpi = profile->switched_dpi;
+	pdata->profile.report_rate = 1000 / profile->report_rate;
+	pdata->profile.default_dpi = profile->default_dpi;
+	pdata->profile.switched_dpi = profile->switched_dpi;
 
 	for (i = 0; i < 5; i++) {
-		pdata.profile.dpi[i] = hidpp_cpu_to_le_u16(profile->dpi[i]);
+		pdata->profile.dpi[i] = hidpp_cpu_to_le_u16(profile->dpi[i]);
 	}
 
 	for (i = 0; i < profiles_list->num_leds; i++)
-		hidpp20_onboard_profiles_write_led(&pdata.profile.leds[i], &profile->leds[i]);
+		hidpp20_onboard_profiles_write_led(&pdata->profile.leds[i], &profile->leds[i]);
 
-	hidpp20_buttons_from_cpu(profile, pdata.profile.buttons, profiles_list->num_buttons);
+	hidpp20_buttons_from_cpu(profile, pdata->profile.buttons, profiles_list->num_buttons);
 
-	memcpy(pdata.profile.name.txt, profile->name, sizeof(profile->name));
+	memcpy(pdata->profile.name.txt, profile->name, sizeof(profile->name));
 
-	rc = hidpp20_onboard_profiles_write_page(device, index + 1, data);
+	rc = hidpp20_onboard_profiles_write_sector(device, sector, sector_size, data);
 	if (rc < 0)
-		return rc;
+		goto out;
 
-	if (rc != sizeof(pdata.data))
-		return -EIO;
-
-	return 0;
+ out:
+	free(data);
+	return rc < 0 ? rc : 0;
 }
 
 static const enum ratbag_button_action_special hidpp20_profiles_specials[] = {
