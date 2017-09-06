@@ -1689,39 +1689,6 @@ hidpp20_onboard_profiles_compute_dict_size(const struct hidpp20_device *device,
 	return num_offset;
 }
 
-int
-hidpp20_onboard_profiles_initialize(struct hidpp20_device *device,
-				    struct hidpp20_profiles *profiles)
-{
-	unsigned i;
-	int rc;
-	uint8_t *data;
-
-	assert(profiles);
-
-	data = hidpp20_onboard_profiles_allocate_sector(profiles);
-
-	rc = hidpp20_onboard_profiles_read_sector(device, 0, profiles->sector_size, data);
-	if (rc < 0) {
-		free(data);
-		return rc;
-	}
-
-	for (i = 0; i < profiles->num_profiles; i++) {
-		uint8_t *d = data + 4 * i;
-
-		if (d[0] == 0xFF && d[1] == 0xFF)
-			break;
-
-		profiles->profiles[i].index = d[1];
-		profiles->profiles[i].enabled = !!d[2];
-	}
-
-	free(data);
-
-	return profiles->num_profiles;
-}
-
 void
 hidpp20_onboard_profiles_destroy(struct hidpp20_profiles *profiles_list)
 {
@@ -2018,6 +1985,39 @@ int hidpp20_onboard_profiles_read(struct hidpp20_device *device,
  out:
 	free(data);
 	return rc;
+}
+
+int
+hidpp20_onboard_profiles_initialize(struct hidpp20_device *device,
+				    struct hidpp20_profiles *profiles)
+{
+	unsigned i;
+	int rc;
+	uint8_t *data;
+
+	assert(profiles);
+
+	data = hidpp20_onboard_profiles_allocate_sector(profiles);
+
+	rc = hidpp20_onboard_profiles_read_sector(device, 0, profiles->sector_size, data);
+	if (rc < 0) {
+		free(data);
+		return rc;
+	}
+
+	for (i = 0; i < profiles->num_profiles; i++) {
+		uint8_t *d = data + 4 * i;
+
+		if (d[0] == 0xFF && d[1] == 0xFF)
+			break;
+
+		profiles->profiles[i].index = d[1];
+		profiles->profiles[i].enabled = !!d[2];
+	}
+
+	free(data);
+
+	return profiles->num_profiles;
 }
 
 static void
