@@ -1933,13 +1933,16 @@ hidpp20_onboard_profiles_read_led(struct hidpp20_led *led,
 	led->brightness = brightness;
 }
 
-int hidpp20_onboard_profiles_read(struct hidpp20_device *device,
-				  unsigned int index,
-				  struct hidpp20_profiles *profiles_list)
+static int
+hidpp20_onboard_profiles_parse_profile(struct hidpp20_device *device,
+				       struct hidpp20_profiles *profiles_list,
+				       unsigned index,
+				       bool check_crc)
 {
 	union hidpp20_internal_profile *pdata;
-	uint8_t *data;
 	struct hidpp20_profile *profile = &profiles_list->profiles[index];
+	uint16_t sector = index + 1;
+	uint8_t *data;
 	unsigned i;
 	int rc;
 
@@ -1949,13 +1952,21 @@ int hidpp20_onboard_profiles_read(struct hidpp20_device *device,
 	data = hidpp20_onboard_profiles_allocate_sector(profiles_list);
 	pdata = (union hidpp20_internal_profile *)data;
 
-	rc = hidpp20_onboard_profiles_find_and_read_profile(device,
-							    index,
-							    profiles_list->sector_size,
-							    data,
-							    profiles_list->num_rom_profiles);
-	if (rc != 0)
+	rc = hidpp20_onboard_profiles_read_sector(device,
+						  sector,
+						  profiles_list->sector_size,
+						  data);
+	if (rc < 0)
 		goto out;
+
+	if (check_crc) {
+		if (!hidpp20_onboard_profiles_is_sector_valid(device,
+							      profiles_list->sector_size,
+							      data)) {
+			rc = -EAGAIN;
+			goto out;
+		}
+	}
 
 	profile->report_rate = 1000 / max(1, pdata->profile.report_rate);
 	profile->default_dpi = pdata->profile.default_dpi;
@@ -1987,24 +1998,38 @@ int hidpp20_onboard_profiles_read(struct hidpp20_device *device,
 	return rc;
 }
 
-int
-hidpp20_onboard_profiles_initialize(struct hidpp20_device *device,
-				    struct hidpp20_profiles *profiles)
+static int
+hidpp20_onboard_profiles_parse(struct hidpp20_device *device,
+			      struct hidpp20_profiles *profiles,
+			      uint16_t dict_address,
+			      bool check_crc)
 {
-	unsigned i;
-	int rc;
 	uint8_t *data;
+	int rc;
+	unsigned i;
 
-	assert(profiles);
+	for (i = 0; i < profiles->num_profiles; i++) {
+		profiles->profiles[i].index = 0;
+		profiles->profiles[i].enabled = 0;
+	}
 
 	data = hidpp20_onboard_profiles_allocate_sector(profiles);
 
-	rc = hidpp20_onboard_profiles_read_sector(device, 0, profiles->sector_size, data);
-	if (rc < 0) {
-		free(data);
-		return rc;
-	}
+	rc = hidpp20_onboard_profiles_read_sector(device,
+						  dict_address,
+						  profiles->sector_size,
+						  data);
+	if (rc < 0)
+		goto out;
 
+	if (check_crc) {
+		if (!hidpp20_onboard_profiles_is_sector_valid(device,
+							      profiles->sector_size,
+							      data)) {
+			rc = -EAGAIN;
+			goto out;
+		}
+	}
 	for (i = 0; i < profiles->num_profiles; i++) {
 		uint8_t *d = data + 4 * i;
 
@@ -2013,9 +2038,49 @@ hidpp20_onboard_profiles_initialize(struct hidpp20_device *device,
 
 		profiles->profiles[i].index = d[1];
 		profiles->profiles[i].enabled = !!d[2];
+
+		rc = hidpp20_onboard_profiles_parse_profile(device,
+							    profiles,
+							    i,
+							    check_crc);
+		if (rc < 0)
+			goto out;
 	}
 
+ out:
 	free(data);
+	return rc;
+}
+
+int
+hidpp20_onboard_profiles_initialize(struct hidpp20_device *device,
+				    struct hidpp20_profiles *profiles)
+{
+	int rc;
+
+	assert(profiles);
+
+	rc = hidpp20_onboard_profiles_parse(device, profiles, 0x0000, true);
+	if (rc == 0)
+		return profiles->num_profiles;
+
+	if (rc != -EAGAIN) {
+		/* something went wrong */
+		return rc;
+	}
+
+	/*
+	 * One of the used sector has a bad crc, the device is using the ROM
+	 * profiles.
+	 */
+
+	hidpp_log_debug(&device->base, "device is using ROM settings\n");
+
+	rc = hidpp20_onboard_profiles_parse(device, profiles, 0x0100, false);
+	if (rc < 0)
+		return rc;
+
+	hidpp_log_debug(&device->base, "ROM settings loaded\n");
 
 	return profiles->num_profiles;
 }
