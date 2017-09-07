@@ -1224,11 +1224,12 @@ hidpp20_onboard_profiles_write_data(struct hidpp20_device *device,
 	return 0;
 }
 
-static int
+int
 hidpp20_onboard_profiles_write_sector(struct hidpp20_device *device,
 				      uint16_t sector,
 				      uint16_t sector_size,
-				      uint8_t *data)
+				      uint8_t *data,
+				      bool write_crc)
 {
 	uint8_t feature_index;
 	uint16_t crc;
@@ -1239,8 +1240,10 @@ hidpp20_onboard_profiles_write_sector(struct hidpp20_device *device,
 	if (feature_index == 0)
 		return -ENOTSUP;
 
-	crc = hidpp_crc_ccitt(data, sector_size - 2);
-	hidpp_set_unaligned_be_u16(&data[sector_size - 2], crc);
+	if (write_crc) {
+		crc = hidpp_crc_ccitt(data, sector_size - 2);
+		hidpp_set_unaligned_be_u16(&data[sector_size - 2], crc);
+	}
 
 	rc = hidpp20_onboard_profiles_write_start(device,
 						  sector,
@@ -1744,7 +1747,8 @@ hidpp20_onboard_profiles_write_dict(struct hidpp20_device *device,
 	rc = hidpp20_onboard_profiles_write_sector(device,
 						   0x0000,
 						   sector_size,
-						   data);
+						   data,
+						   true);
 	free(data);
 	return rc;
 }
@@ -2152,7 +2156,7 @@ hidpp20_onboard_profiles_write_profile(struct hidpp20_device *device,
 
 	memcpy(pdata->profile.name.txt, profile->name, sizeof(profile->name));
 
-	rc = hidpp20_onboard_profiles_write_sector(device, sector, sector_size, data);
+	rc = hidpp20_onboard_profiles_write_sector(device, sector, sector_size, data, true);
 	if (rc < 0)
 		goto out;
 
