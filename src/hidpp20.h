@@ -33,6 +33,10 @@
 #include "hidpp-generic.h"
 #include "libratbag-util.h"
 
+
+// FIXME: should be in hidpp.i
+#define _Static_assert(a,b)
+
 struct _hidpp20_message {
 	uint8_t report_id;
 	uint8_t device_idx;
